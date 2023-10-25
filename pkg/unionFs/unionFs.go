@@ -45,12 +45,14 @@ const (
 
 // Interface of juicefs provider
 type Interface interface {
+	mount.Interface
 	UnionMount(ctx context.Context, target string) error
 	UnionUnmount(ctx context.Context, mountPath string) error
 	CreateUnionLayers(ctx context.Context) error
 }
 
 type unionFs struct {
+	mount.SafeFormatAndMount
 	podId           string
 	uniqueId        string
 	lowerPath       []string
@@ -74,33 +76,16 @@ func CreateUnionFs(lowerPath []string, podId, uniqueId string) *unionFs {
 }
 
 func (u *unionFs) CreateUnionLayers(ctx context.Context) (err error) {
-	defer func() {
-
-	}()
 	base := path.Join(unionBashPath, u.podId, u.uniqueId)
+	defer func() {
+		if err != nil {
+			os.RemoveAll(base)
+		}
+	}()
+
 	s := removeSubPaths(u.lowerPath)
 	for _, val := range s {
-		_, name := path.Split(val)
-		lowerLayer := path.Join(base, val, "lower")
-		linkTarget := path.Join(lowerLayer, name)
-		exists := false
-		if err := util.DoWithTimeout(ctx, defaultCheckTimeout, func() (err error) {
-			exists, err = mount.PathExists(linkTarget)
-			return
-		}); err != nil {
-			return fmt.Errorf("could not check volume path %q exists: %v", linkTarget, err)
-		}
-		if !exists {
-			err = os.MkdirAll(linkTarget, os.FileMode(0777))
-			if err != nil {
-				return err
-			}
-			err = os.Symlink(val, linkTarget)
-			if err != nil {
-				return err
-			}
-		}
-		u.lowerLayers = append(u.lowerLayers, lowerLayer)
+		u.lowerLayers = append(u.lowerLayers, val)
 	}
 	//rwlay
 	u.rwLayer = path.Join(base, "rw")
