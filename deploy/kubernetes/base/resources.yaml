@@ -234,7 +234,7 @@ spec:
             - --logtostderr
             - --nodeid=$(NODE_NAME)
             - --leader-election
-            - --v=5
+            - --v=6
           env:
             - name: CSI_ENDPOINT
               value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
@@ -370,7 +370,7 @@ spec:
             - --endpoint=$(CSI_ENDPOINT)
             - --logtostderr
             - --nodeid=$(NODE_NAME)
-            - --v=5
+            - --v=6
             - --enable-manager=true
           env:
             - name: CSI_ENDPOINT

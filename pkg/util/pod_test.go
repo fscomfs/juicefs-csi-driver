@@ -644,3 +644,75 @@ func TestGetAllRefKeys(t *testing.T) {
 		})
 	}
 }
+
+func TestUseUnionFileSystemPod(t *testing.T) {
+	type args struct {
+		pod *corev1.Pod
+	}
+	tests := []struct {
+		name     string
+		pvcName  string
+		volumeId string
+		args     args
+		want     bool
+	}{
+		{
+			name:     "test",
+			pvcName:  "test-pvc",
+			volumeId: "test-pv",
+			want:     true,
+			args: args{
+				pod: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test",
+						Annotations: map[string]string{
+							"union-test-pvc":   "true",
+							"test-pvc-subpath": "/data/www;/data/qqq",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{{
+							Name:      "test-cn",
+							Image:     "nginx",
+							Resources: testResources,
+						}},
+						NodeName: "test-node",
+					},
+				},
+			},
+		},
+		{
+			name:     "test-2",
+			pvcName:  "test-pvc",
+			volumeId: "test-pv",
+			want:     false,
+			args: args{
+				pod: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test",
+						Annotations: map[string]string{
+							"union-test-pvc1":   "true",
+							"test-pvc1-subpath": "/data/www;/data/qqq",
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{{
+							Name:      "test-cn",
+							Image:     "nginx",
+							Resources: testResources,
+						}},
+						NodeName: "test-node",
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := UseUnionFileSystem(tt.pvcName, tt.volumeId, tt.args.pod)
+			if b != tt.want {
+				t.Errorf("UseUnionFileSystem err. got = %v, want = %v", b, tt.want)
+			}
+		})
+	}
+}

@@ -18,18 +18,19 @@ package driver
 
 import (
 	"context"
-	"path"
-	"reflect"
-	"strconv"
-	"strings"
-
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/juicedata/juicefs-csi-driver/pkg/unionFs"
+	"github.com/juicedata/juicefs-csi-driver/pkg/util"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog"
 	k8sexec "k8s.io/utils/exec"
 	"k8s.io/utils/mount"
+	"path"
+	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/juicedata/juicefs-csi-driver/pkg/juicefs"
 	"github.com/juicedata/juicefs-csi-driver/pkg/k8sclient"
@@ -78,7 +79,6 @@ func (d *nodeService) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 	volumeID := req.GetVolumeId()
 	klog.V(5).Infof("NodePublishVolume: volume_id is %s", volumeID)
-
 	target := req.GetTargetPath()
 	if len(target) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Target path not provided")
@@ -111,6 +111,14 @@ func (d *nodeService) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	volCtx := req.GetVolumeContext()
 	klog.V(5).Infof("NodePublishVolume: volume context: %v", volCtx)
 
+	podName := volCtx["csi.storage.k8s.io/pod.name"]
+	namespace := volCtx["csi.storage.k8s.io/pod.namespace"]
+
+	targetPod, err := d.k8sClient.GetPod(ctx, podName, namespace)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get target pod : %s %s %v", podName, namespace, err)
+	}
+	klog.V(5).Infof("target pod Annotations %v,pvc:%v", targetPod.ObjectMeta.Annotations, targetPod.Spec.Volumes)
 	secrets := req.Secrets
 	mountOptions := []string{}
 	// get mountOptions from PV.volumeAttributes or StorageClass.parameters
@@ -124,52 +132,78 @@ func (d *nodeService) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not mount juicefs: %v", err)
 	}
-
 	bindSource, err := jfs.CreateVol(ctx, volumeID, volCtx["subPath"])
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not create volume: %s, %v", volumeID, err)
 	}
 
-	if err := jfs.BindTarget(ctx, bindSource, target); err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not bind %q at %q: %v", bindSource, target, err)
+	pv, err := d.k8sClient.GetPersistentVolume(ctx, volumeID)
+	if err != nil {
+		klog.V(5).Infof("get pv info fail %v", err)
+		return nil, status.Errorf(codes.Internal, "get pv info fail %v", err)
 	}
+	pvcName := pv.Spec.ClaimRef.Name
+	klog.V(6).Infof("NodePublishVolume: pvc name %+v", pvcName)
 
-	if cap, exist := volCtx["capacity"]; exist {
-		capacity, err := strconv.ParseInt(cap, 10, 64)
+	if util.UseUnionFileSystem(pvcName, volumeID, targetPod) {
+		lowerPath := util.UnionFileSystemSubPaths(bindSource, pvcName, targetPod)
+		podId, err := util.TargetPathPodId(target)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "invalid capacity %s: %v", cap, err)
+			return nil, status.Errorf(codes.Internal, "volumeId:%s targetPath can no get podId %v", volumeID, err)
 		}
-		if d.k8sClient != nil {
-			pv, err := d.k8sClient.GetPersistentVolume(ctx, volumeID)
-			if err != nil && !k8serrors.IsNotFound(err) {
-				return nil, status.Errorf(codes.Internal, "get pv %s: %v", volumeID, err)
-			}
-			if err == nil && pv != nil {
-				capacity = pv.Spec.Capacity.Storage().Value()
-			}
-		}
-		settings, err := d.juicefs.Settings(ctx, volumeID, secrets, volCtx, options)
+		unionFs := unionFs.CreateUnionFs(lowerPath, podId, volumeID)
+		err = unionFs.CreateUnionLayers(ctx)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "get settings: %v", err)
+			klog.V(5).Infof("unionfs create unionLayers fail %v", err)
+			return nil, status.Errorf(codes.Internal, "unionfs create unionLayers fail %v", volumeID, err)
 		}
-		quotaPath := settings.SubPath
-		var subdir string
-		for _, o := range settings.Options {
-			pair := strings.Split(o, "=")
-			if len(pair) != 2 {
-				continue
-			}
-			if pair[0] == "subdir" {
-				subdir = path.Join("/", pair[1])
-			}
+		err = unionFs.UnionMount(ctx, target)
+		if err != nil {
+			klog.V(5).Infof("unionfs mount volumeID %s target %v fail %v", volumeID, target, err)
+			return nil, status.Errorf(codes.Internal, "unionfs mount volumeID %s target %v fail %v", volumeID, target, err)
+		}
+	} else {
+		if err := jfs.BindTarget(ctx, bindSource, target); err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not bind %q at %q: %v", bindSource, target, err)
 		}
 
-		output, err := d.juicefs.SetQuota(ctx, secrets, settings, path.Join(subdir, quotaPath), capacity)
-		if err != nil {
-			klog.Error("set quota: ", err)
-			return nil, status.Errorf(codes.Internal, "set quota: %v", err)
+		if cap, exist := volCtx["capacity"]; exist {
+			capacity, err := strconv.ParseInt(cap, 10, 64)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "invalid capacity %s: %v", cap, err)
+			}
+			if d.k8sClient != nil {
+				pv, err := d.k8sClient.GetPersistentVolume(ctx, volumeID)
+				if err != nil && !k8serrors.IsNotFound(err) {
+					return nil, status.Errorf(codes.Internal, "get pv %s: %v", volumeID, err)
+				}
+				if err == nil && pv != nil {
+					capacity = pv.Spec.Capacity.Storage().Value()
+				}
+			}
+			settings, err := d.juicefs.Settings(ctx, volumeID, secrets, volCtx, options)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "get settings: %v", err)
+			}
+			quotaPath := settings.SubPath
+			var subdir string
+			for _, o := range settings.Options {
+				pair := strings.Split(o, "=")
+				if len(pair) != 2 {
+					continue
+				}
+				if pair[0] == "subdir" {
+					subdir = path.Join("/", pair[1])
+				}
+			}
+
+			output, err := d.juicefs.SetQuota(ctx, secrets, settings, path.Join(subdir, quotaPath), capacity)
+			if err != nil {
+				klog.Error("set quota: ", err)
+				return nil, status.Errorf(codes.Internal, "set quota: %v", err)
+			}
+			klog.V(5).Infof("set quota: %s", output)
 		}
-		klog.V(5).Infof("set quota: %s", output)
 	}
 
 	klog.V(5).Infof("NodePublishVolume: mounted %s at %s with options %v", volumeID, target, mountOptions)
@@ -184,11 +218,16 @@ func (d *nodeService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	if len(target) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Target path not provided")
 	}
-
 	volumeId := req.GetVolumeId()
 	klog.V(5).Infof("NodeUnpublishVolume: volume_id is %s", volumeId)
-
-	err := d.juicefs.JfsUnmount(ctx, volumeId, target)
+	podId, err := util.TargetPathPodId(target)
+	if err != nil {
+		klog.V(5).Infof("NodeUnpublishVolume volumeId%s err:%v", volumeId, err)
+	} else {
+		unionFs := unionFs.CreateUnionFs(nil, podId, volumeId)
+		unionFs.UnionUnmount(ctx, target)
+	}
+	err = d.juicefs.JfsUnmount(ctx, volumeId, target)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not unmount %q: %v", target, err)
 	}

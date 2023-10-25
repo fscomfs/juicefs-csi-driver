@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
+	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -208,6 +210,51 @@ func ReplacePodAnnotation(ctx context.Context, client *k8sclient.K8sClient, pod 
 		return err
 	}
 	return nil
+}
+
+func UseUnionFileSystem(pvcName, volumeID string, pod *corev1.Pod) bool {
+	klog.V(5).Infof("volumeId:%s,pvcName:%s,Annotations:%v", volumeID, pvcName, pod.ObjectMeta.Annotations)
+	for k, val := range pod.ObjectMeta.Annotations {
+		if k == fmt.Sprintf("union-%s", pvcName) {
+			if b, err := strconv.ParseBool(val); err == nil {
+				klog.V(5).Infof("volumeId:%s,pvcName:%s,UseUnionFileSystem:%v", volumeID, pvcName, b)
+				return b
+			}
+		}
+	}
+	return false
+}
+
+func UnionFileSystemSubPaths(bindSource string, pvcName string, pod *corev1.Pod) []string {
+	subpath := []string{}
+	for k, val := range pod.Annotations {
+		if k == fmt.Sprintf("%s-subpath", pvcName) {
+			if val != "" {
+				for _, v := range strings.Split(val, ";") {
+					subpath = append(subpath, path.Join(bindSource, v))
+				}
+			}
+		}
+	}
+	if len(subpath) == 0 {
+		subpath = append(subpath, path.Join(bindSource, "/"))
+	}
+	klog.V(6).Infof("UnionFileSystemSubPaths pvcName:%s,subpath:%v", pvcName, subpath)
+	return subpath
+}
+
+func TargetPathPodId(targetPath string) (string, error) {
+	podsIndex := strings.Index(targetPath, "pods/")
+	if podsIndex == -1 {
+		return "", fmt.Errorf("not a mount path targetPath=%s", targetPath)
+	}
+	substring := targetPath[podsIndex+5:]
+	nextSlashIndex := strings.Index(substring, "/")
+	if nextSlashIndex != -1 {
+		substring = substring[:nextSlashIndex+1]
+	}
+
+	return substring, nil
 }
 
 func GetAllRefKeys(pod corev1.Pod) map[string]string {
