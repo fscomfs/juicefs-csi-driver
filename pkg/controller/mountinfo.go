@@ -126,15 +126,15 @@ func (mit *mountInfoTable) resolveTargetItem(path string, isPrefix bool) []*targ
 		if !match {
 			continue
 		}
-
 		subpath := strings.TrimSuffix(mi.Root, "//deleted")
 		subpath = strings.Trim(subpath, "/")
 		record, ok := records[mi.MountPoint]
 		if !ok {
 			records[mi.MountPoint] = &targetItem{
-				target:  mi.MountPoint,
-				subpath: subpath,
-				count:   1,
+				mountInfo: mi,
+				target:    mi.MountPoint,
+				subpath:   subpath,
+				count:     1,
 			}
 		} else {
 			if record.subpath != subpath {
@@ -166,6 +166,7 @@ type targetItem struct {
 	inconsistent bool
 	status       int
 	err          error
+	mountInfo    k8sMount.MountInfo
 }
 
 func (ti *targetItem) check(mounted bool) {
@@ -175,6 +176,17 @@ func (ti *targetItem) check(mounted bool) {
 			// target exist and is mounted
 			// most likely happen
 			ti.status = targetStatusMounted
+			if strings.EqualFold(ti.mountInfo.FsType, "overlay") {
+				f, err := os.Open(ti.target)
+				if err != nil {
+					ti.status = targetStatusCorrupt
+				}
+				defer f.Close()
+				_, err = f.ReadDir(0)
+				if err != nil {
+					ti.status = targetStatusCorrupt
+				}
+			}
 		} else {
 			// target exist but is a normal directory, not mounted
 			ti.status = targetStatusNotMount

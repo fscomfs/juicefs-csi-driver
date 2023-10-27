@@ -224,7 +224,7 @@ func (u *unionFs) UnionUnmount(ctx context.Context, mountPath string) error {
 	if err := unix.Unmount(mountPath, 0); err != nil {
 		return err
 	}
-	base := path.Join(unionBashPath)
+	base := path.Join(unionBashPath, u.podId, u.uniqueId)
 	os.RemoveAll(base)
 	return nil
 }

@@ -257,6 +257,12 @@ func TargetPathPodId(targetPath string) (string, error) {
 	return substring, nil
 }
 
+func GetUnionPathByMountTarget(mountPath string) string {
+	dir, name := path.Split(mountPath)
+	return path.Join(dir, "union", name)
+
+}
+
 func GetAllRefKeys(pod corev1.Pod) map[string]string {
 	annos := make(map[string]string)
 	for k, v := range pod.Annotations {

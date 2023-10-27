@@ -18,6 +18,7 @@ spec:
       volumeMounts:
         - mountPath: /home/data
           name: data
+          mountPropagation: HostToContainer
       resources:
         requests:
           cpu: 10m

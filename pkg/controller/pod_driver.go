@@ -554,10 +554,18 @@ func (p *PodDriver) recoverTarget(podName, sourcePath string, ti *targetItem, mi
 				break
 			}
 		}
-		klog.V(5).Infof("pod %s target %s recover volPath:%s", podName, ti.target, sourcePath)
-		mountOption := []string{"bind"}
-		if err := p.Mount(sourcePath, ti.target, "none", mountOption); err != nil {
-			klog.Errorf("exec cmd: mount -o bind %s %s err:%v", sourcePath, ti.target, err)
+		if strings.EqualFold(ti.mountInfo.FsType, "overlay") {
+			options := []string{}
+			klog.V(5).Infof("pod %s overlay union target %s recover volPath:%s options:%v", podName, ti.target, sourcePath, ti.mountInfo.SuperOptions)
+			if err := p.Mount("overlay", ti.target, "overlay", append(options, ti.mountInfo.SuperOptions...)); err != nil {
+				klog.Errorf("exec cmd: mount overlay  %s %s options:%v err:%v", sourcePath, ti.target, ti.mountInfo.SuperOptions, err)
+			}
+		} else {
+			klog.V(5).Infof("bind pod %s target %s recover volPath:%s", podName, ti.target, sourcePath)
+			mountOption := []string{"bind"}
+			if err := p.Mount(sourcePath, ti.target, "none", mountOption); err != nil {
+				klog.Errorf("exec cmd: mount -o bind %s %s err:%v", sourcePath, ti.target, err)
+			}
 		}
 
 	case targetStatusUnexpect:
