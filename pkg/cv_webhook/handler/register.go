@@ -24,12 +24,12 @@ import (
 	"github.com/juicedata/juicefs-csi-driver/pkg/k8sclient"
 )
 
-const HandlerPath = "/juicefs/inject-v1-pod"
+const HandlerPath = "/sync/inject-v1-pod"
 
 // Register registers the handlers to the manager
 func Register(mgr manager.Manager, client *k8sclient.K8sClient) {
 	server := mgr.GetWebhookServer()
-	server.Register(HandlerPath, &webhook.Admission{Handler: &SidecarHandler{
+	server.Register(HandlerPath, &webhook.Admission{Handler: &InitContainerHandler{
 		Client: client,
 	}})
 	klog.Infof("Registered webhook handler path %s", HandlerPath)

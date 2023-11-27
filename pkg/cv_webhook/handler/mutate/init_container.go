@@ -29,14 +29,13 @@ import (
 	"k8s.io/klog"
 
 	"github.com/juicedata/juicefs-csi-driver/pkg/config"
+	volconf "github.com/juicedata/juicefs-csi-driver/pkg/cv_webhook/handler/config"
 	"github.com/juicedata/juicefs-csi-driver/pkg/juicefs"
 	"github.com/juicedata/juicefs-csi-driver/pkg/juicefs/mount/builder"
 	"github.com/juicedata/juicefs-csi-driver/pkg/k8sclient"
-	"github.com/juicedata/juicefs-csi-driver/pkg/util"
-	volconf "github.com/juicedata/juicefs-csi-driver/pkg/webhook/handler/config"
 )
 
-type SidecarMutate struct {
+type InitContainerMutate struct {
 	Client  *k8sclient.K8sClient
 	juicefs juicefs.Interface
 
@@ -44,17 +43,17 @@ type SidecarMutate struct {
 	jfsSetting *config.JfsSetting
 }
 
-var _ Mutate = &SidecarMutate{}
+var _ Mutate = &InitContainerMutate{}
 
-func NewSidecarMutate(client *k8sclient.K8sClient, jfs juicefs.Interface, pair []volconf.PVPair) Mutate {
-	return &SidecarMutate{
+func NewInitContainerMutate(client *k8sclient.K8sClient, jfs juicefs.Interface, pair []volconf.PVPair) Mutate {
+	return &InitContainerMutate{
 		Client:  client,
-		juicefs: jfs,
 		Pair:    pair,
+		juicefs: jfs,
 	}
 }
 
-func (s *SidecarMutate) Mutate(ctx context.Context, pod *corev1.Pod) (out *corev1.Pod, err error) {
+func (s *InitContainerMutate) Mutate(ctx context.Context, pod *corev1.Pod) (out *corev1.Pod, err error) {
 	out = pod.DeepCopy()
 	for i, pair := range s.Pair {
 		out, err = s.mutate(ctx, out, pair, i)
@@ -65,7 +64,7 @@ func (s *SidecarMutate) Mutate(ctx context.Context, pod *corev1.Pod) (out *corev
 	return
 }
 
-func (s *SidecarMutate) mutate(ctx context.Context, pod *corev1.Pod, pair volconf.PVPair, index int) (out *corev1.Pod, err error) {
+func (s *InitContainerMutate) mutate(ctx context.Context, pod *corev1.Pod, pair volconf.PVPair, index int) (out *corev1.Pod, err error) {
 	// get secret, volumeContext and mountOptions from PV
 	secrets, volCtx, options, err := s.GetSettings(*pair.PV)
 	if err != nil {
@@ -79,47 +78,30 @@ func (s *SidecarMutate) mutate(ctx context.Context, pod *corev1.Pod, pair volcon
 	if err != nil {
 		return
 	}
-	mountPath := util.RandStringRunes(6)
-	jfsSetting.MountPath = filepath.Join(config.PodMountBase, mountPath)
 
 	jfsSetting.Attr.Namespace = pod.Namespace
+	sourcePaths := []string{}
+	if subPath, ok := pod.Annotations["subpath-"+pair.PV.Name]; ok {
+		sourcePaths = strings.Split(subPath, ";")
+	}
+	jfsSetting.Attr.SourcePath = sourcePaths
 	jfsSetting.SecretName = pair.PVC.Name + "-jfs-secret"
 	s.jfsSetting = jfsSetting
-	capacity := pair.PVC.Spec.Resources.Requests.Storage().Value()
-	cap := capacity / 1024 / 1024 / 1024
-	if cap <= 0 {
-		return nil, fmt.Errorf("capacity %d is too small, at least 1GiB for quota", capacity)
-	}
-	r := builder.NewBuilder(jfsSetting, cap)
+	builder := NewBuilder(jfsSetting, pair, secrets)
+	// gen init container
+	syncWaitContainer := builder.NewSyncWaitContainer()
+	containerStr, _ := json.Marshal(syncWaitContainer)
+	klog.V(6).Infof("sync wait container: %v\n", string(containerStr))
 
-	// create secret per PVC
-	secret := r.NewSecret()
-	builder.SetPVCAsOwner(&secret, pair.PVC)
-	if err = s.createOrUpdateSecret(ctx, &secret); err != nil {
-		return
-	}
-
-	// gen mount pod
-	mountPod := r.NewMountSidecar()
-	podStr, _ := json.Marshal(mountPod)
-	klog.V(6).Infof("mount pod: %v\n", string(podStr))
-
-	// deduplicate container name and volume name in pod when multiple volumes are mounted
-	s.Deduplicate(pod, mountPod, index)
-
-	// inject container
-	s.injectContainer(out, mountPod.Spec.Containers[0])
 	// inject initContainer
-	s.injectInitContainer(out, mountPod.Spec.InitContainers[0])
-	// inject volume
-	s.injectVolume(out, mountPod.Spec.Volumes, mountPath, pair)
+	s.injectInitContainer(out, *syncWaitContainer)
 	// inject label
 	s.injectLabel(out)
 
 	return
 }
 
-func (s *SidecarMutate) Deduplicate(pod, mountPod *corev1.Pod, index int) {
+func (s *InitContainerMutate) Deduplicate(pod, mountPod *corev1.Pod, index int) {
 	conflict := false
 	// deduplicate container name
 	for _, c := range pod.Spec.Containers {
@@ -162,7 +144,7 @@ func (s *SidecarMutate) Deduplicate(pod, mountPod *corev1.Pod, index int) {
 
 }
 
-func (s *SidecarMutate) GetSettings(pv corev1.PersistentVolume) (secrets, volCtx map[string]string, options []string, err error) {
+func (s *InitContainerMutate) GetSettings(pv corev1.PersistentVolume) (secrets, volCtx map[string]string, options []string, err error) {
 	// get secret
 	secret, err := s.Client.GetSecret(
 		context.TODO(),
@@ -198,15 +180,11 @@ func (s *SidecarMutate) GetSettings(pv corev1.PersistentVolume) (secrets, volCtx
 	return
 }
 
-func (s *SidecarMutate) injectContainer(pod *corev1.Pod, container corev1.Container) {
-	pod.Spec.Containers = append([]corev1.Container{container}, pod.Spec.Containers...)
-}
-
-func (s *SidecarMutate) injectInitContainer(pod *corev1.Pod, container corev1.Container) {
+func (s *InitContainerMutate) injectInitContainer(pod *corev1.Pod, container corev1.Container) {
 	pod.Spec.InitContainers = append([]corev1.Container{container}, pod.Spec.InitContainers...)
 }
 
-func (s *SidecarMutate) injectVolume(pod *corev1.Pod, volumes []corev1.Volume, mountPath string, pair volconf.PVPair) {
+func (s *InitContainerMutate) injectVolume(pod *corev1.Pod, volumes []corev1.Volume, mountPath string, pair volconf.PVPair) {
 	hostMount := filepath.Join(config.MountPointPath, mountPath, s.jfsSetting.SubPath)
 	mountedVolume := []corev1.Volume{}
 	podVolumes := make(map[string]bool)
@@ -237,18 +215,17 @@ func (s *SidecarMutate) injectVolume(pod *corev1.Pod, volumes []corev1.Volume, m
 	pod.Spec.Volumes = append(pod.Spec.Volumes, mountedVolume...)
 }
 
-func (s *SidecarMutate) injectLabel(pod *corev1.Pod) {
+func (s *InitContainerMutate) injectLabel(pod *corev1.Pod) {
 	metaObj := pod.ObjectMeta
-
 	if metaObj.Labels == nil {
 		metaObj.Labels = map[string]string{}
 	}
 
-	metaObj.Labels[config.InjectSidecarDone] = config.True
+	metaObj.Labels[config.CvInjectInitContainerDone] = config.True
 	metaObj.DeepCopyInto(&pod.ObjectMeta)
 }
 
-func (s *SidecarMutate) createOrUpdateSecret(ctx context.Context, secret *corev1.Secret) error {
+func (s *InitContainerMutate) createOrUpdateSecret(ctx context.Context, secret *corev1.Secret) error {
 	klog.V(5).Infof("createOrUpdateSecret: %s, %s", secret.Name, secret.Namespace)
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		oldSecret, err := s.Client.GetSecret(ctx, secret.Name, secret.Namespace)

@@ -41,6 +41,40 @@ func IsPodReady(pod *corev1.Pod) bool {
 	return conditionsTrue == 2
 }
 
+func IsPodRunning(pod *corev1.Pod) bool {
+	if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodPending {
+		return true
+	}
+	for _, containerStatus := range pod.Status.ContainerStatuses {
+		if containerStatus.State.Running != nil || containerStatus.State.Terminated == nil {
+			// If any container is running or not terminated, consider the Pod as running or starting
+			return true
+		}
+	}
+	return false
+}
+
+func PodErrorMessage(pod *corev1.Pod) string {
+	if !IsPodRunning(pod) {
+		return pod.Status.Reason
+	}
+	return ""
+}
+
+func IsPodCompleted(pod *corev1.Pod) bool {
+	if pod.Status.Phase == corev1.PodSucceeded {
+		return true
+	}
+	if pod.Status.Phase == corev1.PodRunning {
+		for _, containerStatus := range pod.Status.ContainerStatuses {
+			if containerStatus.State.Terminated != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func containError(statuses []corev1.ContainerStatus) bool {
 	for _, status := range statuses {
 		if (status.State.Waiting != nil && status.State.Waiting.Reason != "ContainerCreating") ||
@@ -228,7 +262,7 @@ func UseUnionFileSystem(pvcName, volumeID string, pod *corev1.Pod) bool {
 func UnionFileSystemSubPaths(bindSource string, pvcName string, pod *corev1.Pod) []string {
 	subpath := []string{}
 	for k, val := range pod.Annotations {
-		if k == fmt.Sprintf("%s-subpath", pvcName) {
+		if k == fmt.Sprintf("subpath-%s", pvcName) {
 			if val != "" {
 				for _, v := range strings.Split(val, ";") {
 					subpath = append(subpath, path.Join(bindSource, v))

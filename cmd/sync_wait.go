@@ -17,163 +17,56 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"net/http"
-	"os"
-	"strconv"
-
+	"github.com/juicedata/juicefs-csi-driver/pkg/config"
+	"github.com/juicedata/juicefs-csi-driver/pkg/sync"
+	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/klog"
-	ctrl "sigs.k8s.io/controller-runtime"
-
-	"github.com/juicedata/juicefs-csi-driver/cmd/app"
-	"github.com/juicedata/juicefs-csi-driver/pkg/config"
-	"github.com/juicedata/juicefs-csi-driver/pkg/driver"
-	k8s "github.com/juicedata/juicefs-csi-driver/pkg/k8sclient"
-	"github.com/juicedata/juicefs-csi-driver/pkg/util"
-)
-
-var (
-	scheme = runtime.NewScheme()
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 func init() {
 	utilruntime.Must(corev1.AddToScheme(scheme))
 }
-func parseControllerConfig() {
-	config.ByProcess = process
-	config.Webhook = webhook
-	config.Provisioner = provisioner
-	config.FormatInPod = formatInPod
-	// enable mount manager by default in csi controller
-	config.MountManager = true
-	if process {
-		// if run in process, does not need pod info
-		config.FormatInPod = false
-		config.MountManager = false
-		config.Webhook = false
-		config.Provisioner = false
-		return
-	}
-	if webhook {
-		// if enable webhook, does not need mount manager & must format in pod
-		config.FormatInPod = true
-		config.MountManager = false
-		config.ByProcess = false
-	}
-	if jfsImmutable := os.Getenv("JUICEFS_IMMUTABLE"); jfsImmutable != "" {
-		// check if running in an immutable environment
-		if immutable, err := strconv.ParseBool(jfsImmutable); err == nil {
-			config.Immutable = immutable
-		} else {
-			klog.Errorf("cannot parse JUICEFS_IMMUTABLE: %v", err)
-		}
+func parseSyncWaitConfig() {
+	config.DstPV = dstPV
+	config.SourcePath = sourcePath
+	config.Mixture = mixture
+	config.Namespace = os.Getenv("CONTROLLER_NAMESPACE")
+	if url := os.Getenv("CONTROLLER_URL"); url != "" {
+		config.ControllerURL = url
+	} else {
+		config.ControllerURL = "http://sync-controller." + config.Namespace + ".svc.cluster.local"
 	}
 
-	config.NodeName = os.Getenv("NODE_NAME")
-	config.Namespace = os.Getenv("JUICEFS_MOUNT_NAMESPACE")
-	config.MountPointPath = os.Getenv("JUICEFS_MOUNT_PATH")
-	config.JFSConfigPath = os.Getenv("JUICEFS_CONFIG_PATH")
-	config.MountLabels = os.Getenv("JUICEFS_MOUNT_LABELS")
-
-	if mountPodImage := os.Getenv("JUICEFS_CE_MOUNT_IMAGE"); mountPodImage != "" {
-		config.CEMountImage = mountPodImage
-	}
-	if mountPodImage := os.Getenv("JUICEFS_EE_MOUNT_IMAGE"); mountPodImage != "" {
-		config.EEMountImage = mountPodImage
-	}
-	if mountPodImage := os.Getenv("JUICEFS_MOUNT_IMAGE"); mountPodImage != "" {
-		// check if it's CE or EE
-		hasCE, hasEE := util.ImageResol(mountPodImage)
-		if hasCE {
-			config.CEMountImage = mountPodImage
-		}
-		if hasEE {
-			config.EEMountImage = mountPodImage
-		}
-	}
-
-	if !config.Webhook {
-		// When not in sidecar mode, we should inherit attributes from CSI Node pod.
-		k8sclient, err := k8s.NewClient()
-		if err != nil {
-			klog.V(5).Infof("Can't get k8s client: %v", err)
-			os.Exit(0)
-		}
-		CSINodeDsName := "juicefs-csi-node"
-		if name := os.Getenv("JUICEFS_CSI_NODE_DS_NAME"); name != "" {
-			CSINodeDsName = name
-		}
-		ds, err := k8sclient.GetDaemonSet(context.TODO(), CSINodeDsName, config.Namespace)
-		if err != nil {
-			klog.V(5).Infof("Can't get DaemonSet %s: %v", CSINodeDsName, err)
-			os.Exit(0)
-		}
-		config.CSIPod = corev1.Pod{
-			Spec: ds.Spec.Template.Spec,
-		}
-	}
 }
-
-func controllerRun() {
-	parseControllerConfig()
-
-	if version {
-		info, err := driver.GetVersionJSON()
-		if err != nil {
-			klog.Fatalln(err)
-		}
-		fmt.Println(info)
-		os.Exit(0)
+func syncWaitCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "syncWait",
+		Short: "Waiting for Synchronization to Complete or Checking Synchronization Status",
+		Run: func(cmd *cobra.Command, args []string) {
+			syncWaitRun()
+		},
 	}
-	if nodeID == "" {
-		klog.Fatalln("nodeID must be provided")
-	}
-
+	cmd.Flags().StringArrayVar(&sourcePath, "source-path", []string{}, "Source of Files to Synchronize")
+	cmd.Flags().StringVar(&dstPV, "dst-pv", "", "Target PV")
+	return cmd
+}
+func syncWaitRun() {
+	parseSyncWaitConfig()
+	signal.Ignore(syscall.SIGPIPE)
+	signalChan := make(chan os.Signal, 10)
+	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 	go func() {
-		port := 6060
 		for {
-			http.ListenAndServe(fmt.Sprintf("localhost:%d", port), nil)
-			port++
+			sig := <-signalChan
+			klog.V(5).Infof("Received signal %s, exiting...", sig.String())
+			os.Exit(1)
 		}
 	}()
-
-	// enable mount manager in csi controller
-	if config.MountManager {
-		go func() {
-			ctx := ctrl.SetupSignalHandler()
-			mgr, err := app.NewMountManager(leaderElection, leaderElectionNamespace, leaderElectionLeaseDuration)
-			if err != nil {
-				klog.Error(err)
-				return
-			}
-			mgr.Start(ctx)
-		}()
-	}
-
-	// enable webhook in csi controller
-	if config.Webhook {
-		go func() {
-			ctx := ctrl.SetupSignalHandler()
-			mgr, err := app.NewWebhookManager(certDir, webhookPort, leaderElection, leaderElectionNamespace, leaderElectionLeaseDuration)
-			if err != nil {
-				klog.Fatalln(err)
-			}
-
-			if err := mgr.Start(ctx); err != nil {
-				klog.Fatalln(err)
-			}
-		}()
-	}
-
-	drv, err := driver.NewDriver(endpoint, nodeID, leaderElection, leaderElectionNamespace, leaderElectionLeaseDuration)
-	if err != nil {
-		klog.Fatalln(err)
-	}
-	if err := drv.Run(); err != nil {
-		klog.Fatalln(err)
-	}
+	checkStatus := sync.CheckSyncStatus{PV: config.DstPV}
+	checkStatus.Run()
 }

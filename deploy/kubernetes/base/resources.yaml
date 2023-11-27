@@ -32,7 +32,7 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get", "create", "update", "patch", "delete"]
+    verbs: ["get", "create", "update","watch", "patch", "delete","list"]
   - apiGroups: [""]
     resources: ["pods", "pods/log"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -535,3 +535,54 @@ data:
   ca.crt: CA_BUNDLE
   tls.crt: TLS_CRT
   tls.key: TLS_KEY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sync-controller
+  namespace: kube-system
+spec:
+  ports:
+    - name: sync
+      port: 80
+      targetPort: 9446
+  selector:
+    app: juicefs-csi-controller
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sync-admission-webhook
+  namespace: kube-system
+spec:
+  ports:
+    - name: https-rest
+      port: 443
+      targetPort: 9447
+  selector:
+    app: juicefs-csi-controller
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: sync-admission-webhook
+webhooks:
+  - name: sync.inject.juicefs.com
+    rules:
+      - apiGroups:   [""]
+        apiVersions: ["v1"]
+        operations:  ["CREATE"]
+        resources:   ["pods"]
+    clientConfig:
+      service:
+        namespace: kube-system
+        name: sync-admission-webhook
+        path: "/sync/inject-v1-pod"
+      caBundle: CA_BUNDLE
+    timeoutSeconds: 20
+    failurePolicy: Fail
+    sideEffects: None
+    admissionReviewVersions: ["v1","v1beta1"]
+    namespaceSelector:
+      matchLabels:
+        juicefs.com/enable-injection: "true"

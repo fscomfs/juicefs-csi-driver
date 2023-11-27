@@ -4,8 +4,9 @@ metadata:
   name: test-pod
   namespace: default
   annotations:
-    test-pvc-subpath: "/data/www;/data/qqq"
+    subpath-test-pvc: "data/www;data/qqq"
     union-test-pvc: "true"
+    sync-test-pvc: "true"
 spec:
   containers:
     - args:

@@ -17,6 +17,7 @@
 package mutate
 
 import (
+	config2 "github.com/juicedata/juicefs-csi-driver/pkg/cv_webhook/handler/config"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -152,10 +153,10 @@ func TestSidecarMutate_injectVolume(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &SidecarMutate{
+			s := &InitContainerMutate{
 				jfsSetting: tt.fields.jfsSetting,
 			}
-			s.injectVolume(tt.args.pod, tt.args.volumes, tt.args.mountPath, tt.fields.pair)
+			s.injectVolume(tt.args.pod, tt.args.volumes, tt.args.mountPath, config2.PVPair(tt.fields.pair))
 			if len(tt.args.pod.Spec.Volumes) != len(tt.wantPodVolume) {
 				t.Errorf("injectVolume() = %v, want %v", tt.args.pod.Spec.Volumes, tt.wantPodVolume)
 			}
@@ -204,7 +205,7 @@ func TestSidecarMutate_injectInitContainer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &SidecarMutate{}
+			s := &InitContainerMutate{}
 			s.injectInitContainer(tt.args.pod, tt.args.container)
 			if len(tt.args.pod.Spec.InitContainers) != tt.wantInitContainerLen {
 				t.Errorf("injectInitContainer() = %v, want %v", tt.args.pod.Spec.InitContainers, tt.wantInitContainerLen)
@@ -237,8 +238,8 @@ func TestSidecarMutate_injectContainer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &SidecarMutate{}
-			s.injectContainer(tt.args.pod, tt.args.container)
+			s := &InitContainerMutate{}
+			s.injectInitContainer(tt.args.pod, tt.args.container)
 			if len(tt.args.pod.Spec.Containers) != tt.wantContainerLen {
 				t.Errorf("injectContainer() = %v, want %v", tt.args.pod.Spec.Containers, tt.wantContainerLen)
 			}
@@ -331,7 +332,7 @@ func TestSidecarMutate_Deduplicate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &SidecarMutate{}
+			s := &InitContainerMutate{}
 			s.Deduplicate(tt.args.pod, tt.args.mountPod, tt.args.index)
 			if !reflect.DeepEqual(tt.args.mountPod, tt.wantMountPod) {
 				t.Errorf("Deduplicate() = %v, want %v", tt.args.mountPod, tt.wantMountPod)

@@ -13,7 +13,11 @@
 # limitations under the License.
 
 FROM juicedata/juicefs-csi-driver:nightly
-
+RUN /bin/sh -c 'if [ "$TARGETARCH" = "amd64" ]; then \
+        wget https://github.com/containers/fuse-overlayfs/releases/download/v1.13/fuse-overlayfs-x86_64 -O /usr/bin/fuse-overlayfs && chmod +x /usr/bin/fuse-overlayfs; \
+    else \
+        wget https://github.com/containers/fuse-overlayfs/releases/download/v1.13/fuse-overlayfs-aarch64 -O /usr/bin/fuse-overlayfs && chmod +x /usr/bin/fuse-overlayfs; \
+       fi'
 COPY juicefs-csi-driver /usr/local/bin/juicefs-csi-driver
 
 ENTRYPOINT ["juicefs-csi-driver"]

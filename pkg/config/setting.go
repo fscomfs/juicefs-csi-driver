@@ -67,8 +67,16 @@ type JfsSetting struct {
 	DeletedDelay        string            `json:"deleted_delay"`
 	CleanCache          bool              `json:"clean_cache"`
 	HostPath            []string          `json:"host_path"`
-	ServiceAccountName  string
-	Resources           corev1.ResourceRequirements
+
+	CentralStorage     string `json:"central_storage,omitempty"`
+	CentralBucket      string `json:"central_bucket,omitempty"`
+	CentralAccessKey   string `json:"central_access_key,omitempty"`
+	CentralSecretKey   string `json:"central_secret_key,omitempty"`
+	CentralController  string `json:"central_controller,omitempty"`
+	PlatformController string `json:"platform_controller,omitempty"`
+
+	ServiceAccountName string
+	Resources          corev1.ResourceRequirements
 
 	// mount
 	VolumeId   string   // volumeHandle of PV
@@ -88,9 +96,9 @@ type PodAttr struct {
 	MountPointPath       string
 	JFSConfigPath        string
 	JFSMountPriorityName string
-
 	// inherit from csi
 	Image            string
+	SyncWaitImage    string
 	HostNetwork      bool
 	HostAliases      []corev1.HostAlias
 	HostPID          bool
@@ -100,6 +108,7 @@ type PodAttr struct {
 	ImagePullSecrets []corev1.LocalObjectReference
 	PreemptionPolicy *corev1.PreemptionPolicy
 	Tolerations      []corev1.Toleration
+	SourcePath       []string
 }
 
 // info of app pod
@@ -267,6 +276,8 @@ func ParseSetting(secrets, volCtx map[string]string, options []string, usePod bo
 	} else {
 		jfsSetting.Attr.Image = EEMountImage
 	}
+
+	jfsSetting.Attr.SyncWaitImage = SyncImage
 
 	if volCtx != nil && volCtx[mountPodImageKey] != "" {
 		jfsSetting.Attr.Image = volCtx[mountPodImageKey]

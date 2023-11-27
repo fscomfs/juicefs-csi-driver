@@ -46,6 +46,7 @@ func init() {
 func parseControllerConfig() {
 	config.ByProcess = process
 	config.Webhook = webhook
+	config.CvWebhook = cv_webhook
 	config.Provisioner = provisioner
 	config.FormatInPod = formatInPod
 	// enable mount manager by default in csi controller
@@ -140,11 +141,10 @@ func controllerRun() {
 			port++
 		}
 	}()
-
+	ctx := ctrl.SetupSignalHandler()
 	// enable mount manager in csi controller
 	if config.MountManager {
 		go func() {
-			ctx := ctrl.SetupSignalHandler()
 			mgr, err := app.NewMountManager(leaderElection, leaderElectionNamespace, leaderElectionLeaseDuration)
 			if err != nil {
 				klog.Error(err)
@@ -157,8 +157,21 @@ func controllerRun() {
 	// enable webhook in csi controller
 	if config.Webhook {
 		go func() {
-			ctx := ctrl.SetupSignalHandler()
 			mgr, err := app.NewWebhookManager(certDir, webhookPort, leaderElection, leaderElectionNamespace, leaderElectionLeaseDuration)
+			if err != nil {
+				klog.Fatalln(err)
+			}
+
+			if err := mgr.Start(ctx); err != nil {
+				klog.Fatalln(err)
+			}
+		}()
+	}
+	syncControllerRun(ctx)
+	// enable webhook in csi controller
+	if config.CvWebhook {
+		go func() {
+			mgr, err := app.NewCvWebhookManager(certDir, webhookPort, leaderElection, leaderElectionNamespace, leaderElectionLeaseDuration)
 			if err != nil {
 				klog.Fatalln(err)
 			}

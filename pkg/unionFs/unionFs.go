@@ -18,10 +18,10 @@ package unionFs
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/juicedata/juicefs-csi-driver/pkg/util"
-	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 	"io/ioutil"
@@ -41,6 +41,7 @@ const (
 	fsTypeNone          = "none"
 	procMountInfoPath   = "/proc/self/mountinfo"
 	unionBashPath       = "/var/lib/kubelet/union"
+	fuseMountBinary     = "fuse-overlayfs"
 )
 
 // Interface of juicefs provider
@@ -53,14 +54,14 @@ type Interface interface {
 
 type unionFs struct {
 	mount.SafeFormatAndMount
-	podId           string
-	uniqueId        string
-	lowerPath       []string
-	lowerLayers     []string
-	rwLayer         string
-	workLayer       string
-	supportsOverlay bool
-	supportsAufs    bool
+	podId               string
+	uniqueId            string
+	lowerPath           []string
+	lowerLayers         []string
+	rwLayer             string
+	workLayer           string
+	supportsOverlay     bool
+	supportsFuseOverlay bool
 }
 
 var (
@@ -118,30 +119,18 @@ func (u *unionFs) CreateUnionLayers(ctx context.Context) (err error) {
 	return nil
 }
 
-func (u *unionFs) aufsMount(target string) (err error) {
-	defer func() {
-		if err != nil {
-
+func (u *unionFs) fuseOverlayMount(target string) (err error) {
+	opts := "lowerdir=" + strings.Join(u.lowerLayers, ":") + ",upperdir=" + u.rwLayer + ",workdir=" + u.workLayer
+	klog.V(5).Infof("Overlay mount target:%v,opts:%v", target, opts)
+	mountProgram := exec.Command(fuseMountBinary, "-o", opts, target)
+	var b bytes.Buffer
+	mountProgram.Stderr = &b
+	if err = mountProgram.Run(); err != nil {
+		output := b.String()
+		if output == "" {
+			output = "<stderr empty>"
 		}
-	}()
-	offset := 54
-	b := make([]byte, unix.Getpagesize()-offset) // room for xino & mountLabel
-	bp := copy(b, fmt.Sprintf("br:%s=rw", u.rwLayer))
-	for index := 0; index < len(u.lowerLayers); index++ {
-		layer := fmt.Sprintf(":%s=ro+wh", u.lowerLayers[index])
-		if bp+len(layer) > len(b) {
-			break
-		}
-		bp += copy(b[bp:], layer)
-	}
-	opts := "dio,xino=/dev/shm/aufs.xino"
-	data := label.FormatMountLabel(fmt.Sprintf("%s,%s", string(b[:bp]), opts), "")
-	err = unix.Mount("none", target, "aufs", 0, data)
-	if err != nil {
-		err = errors.Wrap(err, "mount target="+target+" data="+data)
-		return
-	} else {
-		klog.V(5).Infof("success mount target=%s data=%v", target, data)
+		return err
 	}
 	return
 }
@@ -155,7 +144,7 @@ func (u *unionFs) overlayMount(target string) (err error) {
 	return
 }
 
-func supportsAufs() error {
+func supportsFuseOverlay() error {
 	// We can try to modprobe aufs first before looking at
 	// proc/filesystems for when aufs is supported
 	exec.Command("modprobe", "aufs").Run()
@@ -210,10 +199,10 @@ func (u *unionFs) UnionMount(ctx context.Context, target string) error {
 	} else {
 		klog.V(5).Infof("target not supper overlay %v", err)
 	}
-	if err := supportsAufs(); err == nil {
-		klog.V(5).Infof("target  supper aufs do aufs mount %v", err)
-		u.supportsAufs = true
-		return u.aufsMount(target)
+	if err := supportsFuseOverlay(); err == nil {
+		klog.V(5).Infof("target  supper fuse-overlay do fuse-overlay mount %v", err)
+		u.supportsFuseOverlay = true
+		return u.fuseOverlayMount(target)
 	} else {
 		klog.V(5).Infof("target not supper aufs %v", err)
 	}

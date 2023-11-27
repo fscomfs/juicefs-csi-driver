@@ -28,19 +28,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 
 	"github.com/juicedata/juicefs-csi-driver/pkg/config"
-	mountctrl "github.com/juicedata/juicefs-csi-driver/pkg/controller"
+	"github.com/juicedata/juicefs-csi-driver/pkg/cv_webhook/handler"
 	"github.com/juicedata/juicefs-csi-driver/pkg/k8sclient"
-	"github.com/juicedata/juicefs-csi-driver/pkg/webhook/handler"
 )
 
-type WebhookManager struct {
+type CvWebhookManager struct {
 	mgr    ctrl.Manager
 	client *k8sclient.K8sClient
 }
 
-func NewWebhookManager(certDir string, webhookPort int, leaderElection bool,
+func NewCvWebhookManager(certDir string, webhookPort int, leaderElection bool,
 	leaderElectionNamespace string,
-	leaderElectionLeaseDuration time.Duration) (*WebhookManager, error) {
+	leaderElectionLeaseDuration time.Duration) (*CvWebhookManager, error) {
 	_ = clientgoscheme.AddToScheme(scheme)
 	cfg, err := ctrl.GetConfig()
 	if err != nil {
@@ -52,16 +51,16 @@ func NewWebhookManager(certDir string, webhookPort int, leaderElection bool,
 		Scheme:                  scheme,
 		Port:                    webhookPort,
 		CertDir:                 certDir,
-		MetricsBindAddress:      "0.0.0.0:8084",
+		MetricsBindAddress:      "0.0.0.0:8085",
 		LeaderElection:          leaderElection,
-		LeaderElectionID:        "webhook.juicefs.com",
+		LeaderElectionID:        "cv-webhook.juicefs.com",
 		LeaderElectionNamespace: leaderElectionNamespace,
 		LeaseDuration:           &leaderElectionLeaseDuration,
 		NewCache: cache.BuilderWithOptions(cache.Options{
 			Scheme: scheme,
 			SelectorsByObject: cache.SelectorsByObject{
 				&corev1.Pod{}: {
-					Label: labels.SelectorFromSet(labels.Set{config.InjectSidecarDone: config.True}),
+					Label: labels.SelectorFromSet(labels.Set{config.CvInjectInitContainer: config.CvTrue}),
 				},
 			},
 		}),
@@ -77,22 +76,18 @@ func NewWebhookManager(certDir string, webhookPort int, leaderElection bool,
 		klog.V(5).Infof("Could not create k8s client %v", err)
 		return nil, err
 	}
-	return &WebhookManager{
+	return &CvWebhookManager{
 		mgr:    mgr,
 		client: k8sClient,
 	}, nil
 }
 
-func (w *WebhookManager) Start(ctx context.Context) error {
+func (w *CvWebhookManager) Start(ctx context.Context) error {
 	if err := w.registerWebhook(); err != nil {
-		klog.Errorf("Register webhook error: %v", err)
+		klog.Errorf("Register cv webhook error: %v", err)
 		return err
 	}
-	if err := w.registerAppController(); err != nil {
-		klog.Errorf("Register app controller error: %v", err)
-		return err
-	}
-	klog.Info("Webhook manager started.")
+	klog.Info("CvWebhook manager started.")
 	if err := w.mgr.Start(ctx); err != nil {
 		klog.Errorf("Webhook manager start error: %v", err)
 		return err
@@ -100,15 +95,9 @@ func (w *WebhookManager) Start(ctx context.Context) error {
 	return nil
 }
 
-func (w *WebhookManager) registerWebhook() error {
+func (w *CvWebhookManager) registerWebhook() error {
 	// register admission handlers
-	klog.Info("Register webhook handler")
+	klog.Info("Register cv webhook handler")
 	handler.Register(w.mgr, w.client)
 	return nil
-}
-
-func (w *WebhookManager) registerAppController() error {
-	// init Reconciler（Controller）
-	klog.Info("Register app controller")
-	return (mountctrl.NewAppController(w.client)).SetupWithManager(w.mgr)
 }

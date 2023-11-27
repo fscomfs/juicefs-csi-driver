@@ -34,17 +34,22 @@ var (
 	formatInPod bool
 	process     bool
 
-	provisioner bool
-	webhook     bool
-	certDir     string
-	webhookPort int
-
+	provisioner        bool
+	webhook            bool
+	certDir            string
+	webhookPort        int
+	cv_webhook         bool
 	podManager         bool
 	reconcilerInterval int
 
 	leaderElection              bool
 	leaderElectionNamespace     string
 	leaderElectionLeaseDuration time.Duration
+
+	dstPV          string
+	sourcePath     []string
+	mixture        string
+	syncServerPort int
 )
 
 func main() {
@@ -55,21 +60,24 @@ func main() {
 			run()
 		},
 	}
-	cmd.PersistentFlags().StringVar(&endpoint, "endpoint", "unix://tmp/csi.sock", "CSI endpoint")
-	cmd.PersistentFlags().BoolVar(&version, "version", false, "Print the version and exit.")
-	cmd.PersistentFlags().StringVar(&nodeID, "nodeid", "", "Node ID")
-	cmd.PersistentFlags().BoolVar(&formatInPod, "format-in-pod", false, "Put format/auth in pod")
-	cmd.PersistentFlags().BoolVar(&process, "by-process", false, "CSI Driver run juicefs in process or not. default false.")
+	cmd.Flags().StringVar(&endpoint, "endpoint", "unix://tmp/csi.sock", "CSI endpoint")
+	cmd.Flags().BoolVar(&version, "version", false, "Print the version and exit.")
+	cmd.Flags().StringVar(&nodeID, "nodeid", "", "Node ID")
+	cmd.Flags().BoolVar(&formatInPod, "format-in-pod", false, "Put format/auth in pod")
+	cmd.Flags().BoolVar(&process, "by-process", false, "CSI Driver run juicefs in process or not. default false.")
 
-	cmd.PersistentFlags().BoolVar(&leaderElection, "leader-election", false, "Enables leader election. If leader election is enabled, additional RBAC rules are required. ")
-	cmd.PersistentFlags().StringVar(&leaderElectionNamespace, "leader-election-namespace", "", "Namespace where the leader election resource lives. Defaults to the pod namespace if not set.")
-	cmd.PersistentFlags().DurationVar(&leaderElectionLeaseDuration, "leader-election-lease-duration", 15*time.Second, "Duration, in seconds, that non-leader candidates will wait to force acquire leadership. Defaults to 15 seconds.")
+	cmd.Flags().BoolVar(&leaderElection, "leader-election", false, "Enables leader election. If leader election is enabled, additional RBAC rules are required. ")
+	cmd.Flags().StringVar(&leaderElectionNamespace, "leader-election-namespace", "", "Namespace where the leader election resource lives. Defaults to the pod namespace if not set.")
+	cmd.Flags().DurationVar(&leaderElectionLeaseDuration, "leader-election-lease-duration", 15*time.Second, "Duration, in seconds, that non-leader candidates will wait to force acquire leadership. Defaults to 15 seconds.")
 
 	// controller flags
 	cmd.Flags().BoolVar(&provisioner, "provisioner", false, "Enable provisioner in controller. default false.")
 	cmd.Flags().BoolVar(&webhook, "webhook", false, "Enable webhook in controller. default false.")
+	cmd.Flags().BoolVar(&cv_webhook, "cv-webhook", false, "Enable webhook in controller. default false.")
 	cmd.Flags().StringVar(&certDir, "webhook-cert-dir", "/etc/webhook/certs", "Admission webhook cert/key dir.")
 	cmd.Flags().IntVar(&webhookPort, "webhook-port", 9444, "Admission webhook cert/key dir.")
+	cmd.Flags().StringVar(&mixture, "mixture", "cloud", "Enable webhook in controller. default false.")
+	cmd.Flags().IntVar(&syncServerPort, "sync-server-port", 9446, "sync controller server port")
 
 	// node flags
 	cmd.Flags().BoolVar(&podManager, "enable-manager", false, "Enable pod manager in csi node. default false.")
@@ -78,7 +86,7 @@ func main() {
 	goFlag := goflag.CommandLine
 	klog.InitFlags(goFlag)
 	cmd.PersistentFlags().AddGoFlagSet(goFlag)
-
+	cmd.AddCommand(syncWaitCmd())
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
 	}

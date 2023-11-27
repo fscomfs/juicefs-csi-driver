@@ -31,6 +31,7 @@ var (
 	Provisioner  = false // provisioner in controller
 	MountManager = false // manage mount pod in controller (only in k8s)
 	Webhook      = false // inject juicefs client as sidecar in pod (only in k8s)
+	CvWebhook    = false // inject juicefs client as sidecar in pod (only in k8s)
 	Immutable    = false // csi driver is running in an immutable environment
 
 	NodeName           = ""
@@ -38,6 +39,7 @@ var (
 	PodName            = ""
 	CEMountImage       = "juicedata/mount:ce-nightly" // mount pod ce image
 	EEMountImage       = "juicedata/mount:ee-nightly" // mount pod ee image
+	SyncImage          = "juicedata/mount:ce-nightly" // mount pod ce image
 	MountLabels        = ""
 	HostIp             = ""
 	KubeletPort        = ""
@@ -61,25 +63,40 @@ var (
 	JfsMountPath    = "/sbin/mount.juicefs"
 	JfsGoBinaryPath = os.Getenv("JFS_MOUNT_PATH")
 	JfsChannel      = os.Getenv("JFSCHAN")
+
+	DstPV                = ""         //sync check target PV
+	SourcePath           = []string{} //sync check source PATH
+	DstPath              = []string{} //sync check target target PATH
+	Mixture              = ""
+	SyncConcurrentNumber = 3 //do sync concurrent number
+	ControllerURL        = ""
+	SyncServerPort       = 9446
 )
 
 const (
 	// DriverName to be registered
-	DriverName           = "csi.juicefs.com"
-	CSINodeLabelKey      = "app"
-	CSINodeLabelValue    = "juicefs-csi-node"
-	PodTypeKey           = "app.kubernetes.io/name"
-	PodTypeValue         = "juicefs-mount"
-	PodUniqueIdLabelKey  = "volume-id"
-	PodJuiceHashLabelKey = "juicefs-hash"
-	Finalizer            = "juicefs.com/finalizer"
-	JuiceFSUUID          = "juicefs-uuid"
-	UniqueId             = "juicefs-uniqueid"
-	CleanCache           = "juicefs-clean-cache"
-	MountContainerName   = "jfs-mount"
-	JuiceFSMountPod      = "juicefs-mountpod"
-	JobTypeValue         = "juicefs-job"
-
+	DriverName                  = "csi.juicefs.com"
+	CSINodeLabelKey             = "app"
+	CSINodeLabelValue           = "juicefs-csi-node"
+	PodTypeKey                  = "app.kubernetes.io/name"
+	PodTypeValue                = "juicefs-mount"
+	PodUniqueIdLabelKey         = "volume-id"
+	PodJuiceHashLabelKey        = "juicefs-hash"
+	Finalizer                   = "juicefs.com/finalizer"
+	JuiceFSUUID                 = "juicefs-uuid"
+	UniqueId                    = "juicefs-uniqueid"
+	CleanCache                  = "juicefs-clean-cache"
+	MountContainerName          = "jfs-mount"
+	JuiceFSMountPod             = "juicefs-mountpod"
+	JobTypeValue                = "juicefs-job"
+	SyncWaitContainerName       = "jfs-sync-wait"
+	SyncContainerName           = "jfs-sync"
+	SyncPVLabelKey              = "data-set-sync"
+	SyncPVLabelVal              = "true"
+	SyncPodLabelKey             = "data-set-sync-task"
+	SyncLabelPVKey              = "data-set-sync-pv"
+	SyncPodLabelVal             = "sync-path"
+	SyncPodAnnotationSourcePath = "sync-source-path"
 	// CSI Secret
 	ProvisionerSecretName           = "csi.storage.k8s.io/provisioner-secret-name"
 	ProvisionerSecretNamespace      = "csi.storage.k8s.io/provisioner-secret-namespace"
@@ -96,6 +113,16 @@ const (
 	injectSidecar        = ".sidecar" + inject
 	InjectSidecarDone    = "done" + injectSidecar
 	InjectSidecarDisable = "disable" + injectSidecar
+
+	//cv webhook
+
+	CvWebhookName                     = "juicefs-admission-cv-webhook"
+	CvTrue                            = "true"
+	CvFalse                           = "false"
+	CvInject                          = ".juicefs.com/cvInject"
+	CvInjectInitContainer             = ".initContainer" + CvInject
+	CvInjectInitContainerDone         = "done" + CvInjectInitContainer
+	CvInjectInitContainerDoneDisabled = "disable" + CvInjectInitContainer
 
 	// config in pv
 	mountPodCpuLimitKey    = "juicefs/mount-cpu-limit"
@@ -120,6 +147,15 @@ const (
 	defaultMountPodMemLimit   = "5Gi"
 	defaultMountPodCpuRequest = "1000m"
 	defaultMountPodMemRequest = "1Gi"
+
+	CheckSyncStatusAPi = "/checkSyncStatus"
+	SyncController     = "sync_controller"
+	PlatformController = "platform_controller"
+	Metaurl            = "metaurl"
+	CentralStorage     = "central_storage"
+	CentralBucket      = "central_bucket"
+	CentralAccessKey   = "central_access_key"
+	CentralSecretKey   = "central_secret_key"
 )
 
 var PodLocks [1024]sync.Mutex

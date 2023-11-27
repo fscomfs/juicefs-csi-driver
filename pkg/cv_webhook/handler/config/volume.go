@@ -19,12 +19,12 @@ package config
 import (
 	"context"
 	"fmt"
-
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
+	"strconv"
 
 	"github.com/juicedata/juicefs-csi-driver/pkg/config"
 	"github.com/juicedata/juicefs-csi-driver/pkg/k8sclient"
@@ -95,8 +95,13 @@ func getVol(ctx context.Context, client *k8sclient.K8sClient, pod *corev1.Pod, n
 			}
 			// if PV is JuiceFS PV
 			if pv.Spec.CSI != nil && pv.Spec.CSI.Driver == config.DriverName {
-				used = true
-				pvPairGot = append(pvPairGot, PVPair{PV: pv, PVC: pvc})
+				if val, ok := pod.Annotations["sync-"+pvc.Name]; ok {
+					if v, err := strconv.ParseBool(val); err == nil && v {
+						used = true
+						pvPairGot = append(pvPairGot, PVPair{PV: pv, PVC: pvc})
+					}
+				}
+
 			}
 		}
 	}
