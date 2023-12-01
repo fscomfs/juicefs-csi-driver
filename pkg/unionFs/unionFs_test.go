@@ -3,6 +3,7 @@ package unionFs
 import (
 	"fmt"
 	"golang.org/x/sys/unix"
+	"io/ioutil"
 	k8sMount "k8s.io/utils/mount"
 	"os"
 	"strings"
@@ -60,4 +61,12 @@ func Test_mountInfo(t *testing.T) {
 			fmt.Println(mis[i])
 		}
 	}
+}
+
+func Test_supper(t *testing.T) {
+	target := "/data/home/1111"
+	os.MkdirAll(target, os.FileMode(0755))
+	s, _ := ioutil.TempDir(target, "123123")
+	fmt.Printf(s)
+	os.RemoveAll(s)
 }

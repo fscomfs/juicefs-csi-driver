@@ -214,7 +214,7 @@ spec:
   selector:
     matchLabels:
       app: juicefs-csi-controller
-  replicas: 2
+  replicas: 1
   volumeClaimTemplates: []
   template:
     metadata:
@@ -254,6 +254,8 @@ spec:
               value: /var/lib/juicefs/volume
             - name: JUICEFS_CONFIG_PATH
               value: /var/lib/juicefs/config
+            - name: ENABLE_APISERVER_LIST_CACHE
+              value: "true"
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
@@ -397,6 +399,8 @@ spec:
               value: /var/lib/juicefs/volume
             - name: JUICEFS_CONFIG_PATH
               value: /var/lib/juicefs/config
+            - name: ENABLE_APISERVER_LIST_CACHE
+              value: "true"
           volumeMounts:
             - name: kubelet-dir
               mountPath: /var/lib/kubelet
@@ -558,7 +562,7 @@ spec:
   ports:
     - name: https-rest
       port: 443
-      targetPort: 9447
+      targetPort: 9444
   selector:
     app: juicefs-csi-controller
 ---
@@ -585,4 +589,4 @@ webhooks:
     admissionReviewVersions: ["v1","v1beta1"]
     namespaceSelector:
       matchLabels:
-        juicefs.com/enable-injection: "true"
+        data-set-sync/enable-injection: "true"

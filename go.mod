@@ -5,12 +5,14 @@ require (
 	github.com/container-storage-interface/spec v1.5.0
 	github.com/go-logr/logr v1.2.0
 	github.com/golang/mock v1.6.0
+	github.com/mattn/go-isatty v0.0.20
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.18.1
 	github.com/pkg/errors v0.9.1
 	github.com/redis/go-redis/v9 v9.3.0
 	github.com/smartystreets/goconvey v1.6.4
 	github.com/spf13/cobra v1.1.3
+	github.com/vbauerster/mpb/v7 v7.5.3
 	github.com/vbauerster/mpb/v8 v8.6.2
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
 	golang.org/x/sys v0.13.0

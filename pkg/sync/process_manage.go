@@ -6,8 +6,9 @@ import (
 	"net/http"
 )
 
-func StartProcessManage() {
+func startProcessManage() {
 	http.NewServeMux()
-	http.HandleFunc(config.CheckSyncStatusAPi, checkStatus)
+	http.HandleFunc(config.CheckSyncStatusApi, checkStatus)
+	http.HandleFunc(config.SyncProcessStateApi, processState)
 	http.ListenAndServe(fmt.Sprintf(":%d", config.SyncServerPort), nil)
 }

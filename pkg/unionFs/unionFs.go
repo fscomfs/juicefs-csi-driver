@@ -24,7 +24,6 @@ import (
 	"github.com/juicedata/juicefs-csi-driver/pkg/util"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
-	"io/ioutil"
 	"k8s.io/klog"
 	"os"
 	"os/exec"
@@ -164,7 +163,8 @@ func supportsFuseOverlay() error {
 }
 
 func supportsOverlay(d string) error {
-	td, err := ioutil.TempDir(d, "check-overlayfs-support")
+	td := path.Join(d, "check-overlayfs-support")
+	err := os.MkdirAll(td, os.FileMode(0755))
 	if err != nil {
 		return err
 	}
@@ -213,8 +213,10 @@ func (u *unionFs) UnionUnmount(ctx context.Context, mountPath string) error {
 	if err := unix.Unmount(mountPath, 0); err != nil {
 		return err
 	}
-	base := path.Join(unionBashPath, u.podId, u.uniqueId)
-	os.RemoveAll(base)
+	base := path.Join(unionBashPath, u.podId)
+	if err := os.RemoveAll(base); err != nil {
+		klog.Errorf("[UnionUnmount] remove rw path:%s ,err:%v", base, err)
+	}
 	return nil
 }
 

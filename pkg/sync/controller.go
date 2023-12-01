@@ -78,9 +78,6 @@ func NewDataSyncController(ctx context.Context,
 		NewCache: cache.BuilderWithOptions(cache.Options{
 			Scheme: scheme,
 			SelectorsByObject: cache.SelectorsByObject{
-				&corev1.PersistentVolume{}: {
-					Label: labels.SelectorFromSet(labels.Set{config.SyncPVLabelKey: config.SyncPVLabelVal}),
-				},
 				&corev1.Pod{}: {
 					Label: labels.SelectorFromSet(labels.Set{config.SyncPodLabelKey: config.SyncPodLabelVal}),
 				},
@@ -110,11 +107,36 @@ func NewDataSyncController(ctx context.Context,
 }
 func (c *DataSyncController) Run(ctx context.Context) {
 	wrapRegister(c.mixture)
-
 	go func() {
-		StartProcessManage()
+		startProcessManage()
 	}()
+	c.timerInitConfig()
+	if err := c.SetupWithManager(c.mgr); err != nil {
+		klog.Errorf("Register sync controller error: %v", err)
+		return
+	}
+	if err := c.mgr.Start(ctx); err != nil {
+		klog.Errorf("sync manager start error: %v", err)
+		return
+	}
 
+}
+func (c *DataSyncController) timerInitConfig() {
+	c.initConfig()
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-c.ctx.Done():
+				return
+			case <-ticker.C:
+				c.initConfig()
+			}
+		}
+	}()
+}
+func (c *DataSyncController) initConfig() {
 	labelSelector := &metav1.LabelSelector{
 		MatchLabels: labels.Set{
 			config.SyncPVLabelKey: config.SyncPVLabelVal,
@@ -127,10 +149,25 @@ func (c *DataSyncController) Run(ctx context.Context) {
 	if err != nil {
 		return
 	}
+
 	if c.discoverys == nil {
 		c.discoverys = make(map[string]*task.Discovery)
 	}
+	for s := range c.discoverys {
+		exits := false
+		for i := range juicefsPVs.Items {
+			if juicefsPVs.Items[i].Name == s && juicefsPVs.Items[i].Annotations[config.SyncPVAnnotationKey] == config.SyncPVLabelVal {
+				exits = true
+			}
+		}
+		if !exits {
+			c.discoverys[s].Done()
+		}
+	}
 	for i := range juicefsPVs.Items {
+		if juicefsPVs.Items[i].Annotations[config.SyncPVAnnotationKey] != config.SyncPVLabelVal {
+			continue
+		}
 		pv := juicefsPVs.Items[i]
 		secretName := pv.Spec.CSI.NodePublishSecretRef.Name
 		secretNamespace := pv.Spec.CSI.NodePublishSecretRef.Namespace
@@ -140,25 +177,18 @@ func (c *DataSyncController) Run(ctx context.Context) {
 			continue
 		}
 		if _, ok := c.discoverys[pv.Name]; !ok {
-			if secret.Data[config.PlatformController] != nil && secret.Data[config.CentralBucket] != nil {
-				dis, err := task.NewDiscover(c.ctx, *secret, c.mixture, pv, c.k8sClient)
-				if err != nil {
-					continue
-				}
-				c.discoverys[pv.Name] = dis
+			dis, err := task.NewDiscover(c.ctx, *secret, c.mixture, pv, c.k8sClient)
+			if err != nil {
+				continue
 			}
+			c.discoverys[pv.Name] = dis
+		} else {
+			c.discoverys[pv.Name].UpdateDiscovery(*secret)
+			c.discoverys[pv.Name].Start()
 		}
 	}
-	if err := c.SetupWithManager(c.mgr); err != nil {
-		klog.Errorf("Register sync controller error: %v", err)
-		return
-	}
-	if err := c.mgr.Start(ctx); err != nil {
-		klog.Errorf("sync manager start error: %v", err)
-		return
-	}
-
 }
+
 func (m *SyncPodManage) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	pod, err := m.SyncController.k8sClient.GetPod(ctx, request.Name, request.Namespace)
 	if err != nil && !k8serrors.IsNotFound(err) {
@@ -169,22 +199,23 @@ func (m *SyncPodManage) Reconcile(ctx context.Context, request reconcile.Request
 		klog.V(6).Infof("sync pod %s has been deleted.", request.Name)
 		return reconcile.Result{}, nil
 	}
-	if !util.IsPodError(pod) && !util.IsPodResourceError(pod) {
-		if pvName, ok := pod.Labels[config.SyncLabelPVKey]; ok {
-			if pvDiscovery, ok := m.SyncController.discoverys[pvName]; ok {
-				sourcePath := pod.Labels[config.SyncPodAnnotationSourcePath]
-				if util.IsPodRunning(pod) {
-					pvDiscovery.UpdateSourceSyncStatus(sourcePath, task.SYNC_DOING)
-					klog.V(5).Infof("sync source path %s syncing", sourcePath)
-				}
-				if util.IsPodCompleted(pod) {
-					pvDiscovery.UpdateSourceSyncStatus(sourcePath, task.SYNC_COMPLETED)
-					klog.V(5).Infof("sync source path %s completed", sourcePath)
-				}
-				if util.IsPodError(pod) {
-					pvDiscovery.UpdateSourceSyncStatus(sourcePath, task.SYNC_FAIL)
-					klog.V(5).Infof("sync source path %s fail reason:%s", sourcePath, util.PodErrorMessage(pod))
-				}
+	if pvName, ok := pod.Labels[config.SyncLabelPVKey]; ok {
+		if pvDiscovery, ok := m.SyncController.discoverys[pvName]; ok {
+			sourcePath := pod.Annotations[config.SyncPodAnnotationSourcePath]
+			if util.IsPodRunning(pod) {
+				pvDiscovery.UpdateSourceSyncStatus(sourcePath, task.SYNC_DOING)
+				klog.V(5).Infof("sync source path %s syncing", sourcePath)
+				return reconcile.Result{}, nil
+			}
+			if util.IsPodCompleted(pod) {
+				pvDiscovery.UpdateSourceSyncStatus(sourcePath, task.SYNC_COMPLETED)
+				klog.V(5).Infof("sync source path %s completed", sourcePath)
+				return reconcile.Result{}, nil
+			}
+			if util.IsPodError(pod) || util.IsPodResourceError(pod) {
+				pvDiscovery.UpdateSourceSyncStatus(sourcePath, task.SYNC_FAIL)
+				klog.V(5).Infof("sync source path %s fail reason:%s", sourcePath, util.PodErrorMessage(pod))
+				return reconcile.Result{}, nil
 			}
 		}
 	}
@@ -236,6 +267,7 @@ func (m *PVManage) Reconcile(ctx context.Context, request reconcile.Request) (re
 		}
 	} else {
 		m.SyncController.discoverys[pv.Name].UpdateDiscovery(*secret)
+		m.SyncController.discoverys[pv.Name].Start()
 	}
 	return reconcile.Result{}, nil
 }
@@ -247,19 +279,19 @@ func (c *DataSyncController) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
-	controller2, err := controller.New("pv_update", mgr, controller.Options{Reconciler: &PVManage{
-		SyncController: c,
-	}})
-	if err != nil {
-		return err
-	}
-
-	controller3, err := controller.New("pv_secret", mgr, controller.Options{Reconciler: &SecretManage{
-		SyncController: c,
-	}})
-	if err != nil {
-		return err
-	}
+	//controller2, err := controller.New("pv_update", mgr, controller.Options{Reconciler: &PVManage{
+	//	SyncController: c,
+	//}})
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//controller3, err := controller.New("pv_secret", mgr, controller.Options{Reconciler: &SecretManage{
+	//	SyncController: c,
+	//}})
+	//if err != nil {
+	//	return err
+	//}
 
 	err = controller1.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForObject{}, predicate.Funcs{
 		CreateFunc: func(event event.CreateEvent) bool {
@@ -291,42 +323,42 @@ func (c *DataSyncController) SetupWithManager(mgr ctrl.Manager) error {
 			return false
 		},
 	})
-	err = controller2.Watch(&source.Kind{Type: &corev1.PersistentVolume{}}, &handler.EnqueueRequestForObject{}, predicate.Funcs{
-		CreateFunc: func(event event.CreateEvent) bool {
-			pv, ok := event.Object.(*corev1.PersistentVolume)
-			if !ok {
-				klog.V(6).Infof("pv.onUpdateFunc Skip object: %v", pv.Name)
-				return false
-			}
-			klog.V(6).Infof("watch pv %s created", pv.GetName())
-			// check pv deleted
-			if _, ok := pv.Labels[config.SyncPVLabelKey]; ok {
-				klog.V(6).Infof("pv %s is sync pv", pv.Name)
-				return true
-			}
-			return false
-		},
-		UpdateFunc: func(updateEvent event.UpdateEvent) bool {
-			pvNew, ok := updateEvent.ObjectNew.(*corev1.PersistentVolume)
-			klog.V(6).Infof("watch pv %s updated", pvNew.GetName())
-			if !ok {
-				klog.V(6).Infof("pod.onUpdateFunc Skip object: %v", updateEvent.ObjectNew)
-				return false
-			}
-			return true
-		},
-		DeleteFunc: func(deleteEvent event.DeleteEvent) bool {
-			pv := deleteEvent.Object.(*corev1.PersistentVolume)
-			klog.V(6).Infof("watch pv %s deleted", pv.GetName())
-			if _, ok := pv.Labels[config.SyncPVLabelKey]; ok {
-				klog.V(6).Infof("pv %s is sync pv", pv.Name)
-				return true
-			}
-			return false
-		},
-	})
-
-	err = controller3.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestForObject{})
+	//err = controller2.Watch(&source.Kind{Type: &corev1.PersistentVolume{}}, &handler.EnqueueRequestForObject{}, predicate.Funcs{
+	//	CreateFunc: func(event event.CreateEvent) bool {
+	//		pv, ok := event.Object.(*corev1.PersistentVolume)
+	//		if !ok {
+	//			klog.V(6).Infof("pv.onUpdateFunc Skip object: %v", pv.Name)
+	//			return false
+	//		}
+	//		klog.V(6).Infof("watch pv %s created", pv.GetName())
+	//		// check pv deleted
+	//		if _, ok := pv.Labels[config.SyncPVLabelKey]; ok {
+	//			klog.V(6).Infof("pv %s is sync pv", pv.Name)
+	//			return true
+	//		}
+	//		return false
+	//	},
+	//	UpdateFunc: func(updateEvent event.UpdateEvent) bool {
+	//		pvNew, ok := updateEvent.ObjectNew.(*corev1.PersistentVolume)
+	//		klog.V(6).Infof("watch pv %s updated", pvNew.GetName())
+	//		if !ok {
+	//			klog.V(6).Infof("pod.onUpdateFunc Skip object: %v", updateEvent.ObjectNew)
+	//			return false
+	//		}
+	//		return true
+	//	},
+	//	DeleteFunc: func(deleteEvent event.DeleteEvent) bool {
+	//		pv := deleteEvent.Object.(*corev1.PersistentVolume)
+	//		klog.V(6).Infof("watch pv %s deleted", pv.GetName())
+	//		if _, ok := pv.Labels[config.SyncPVLabelKey]; ok {
+	//			klog.V(6).Infof("pv %s is sync pv", pv.Name)
+	//			return true
+	//		}
+	//		return false
+	//	},
+	//})
+	//
+	//err = controller3.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestForObject{})
 	return err
 }
 

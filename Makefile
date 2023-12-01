@@ -13,6 +13,7 @@
 # limitations under the License.
 
 IMAGE?=juicedata/juicefs-csi-driver
+MOUNT_IMAGE=registry.cn-shenzhen.aliyuncs.com/fscomfs/mount:v1.1.0
 REGISTRY?=docker.io
 TARGETARCH?=amd64
 VERSION=$(shell git describe --tags --match 'v*' --always --dirty)
@@ -72,7 +73,7 @@ uninstall: yaml
 # build dev image
 .PHONY: image-dev
 image-dev: juicefs-csi-driver
-	docker build --build-arg TARGETARCH=$(TARGETARCH) -t $(IMAGE):$(DEV_TAG) --build-arg=ttps_proxy=${HPROXY} -f docker/dev.Dockerfile bin
+	docker build --build-arg TARGETARCH=$(TARGETARCH) -t $(IMAGE):$(DEV_TAG) --build-arg=https_proxy=${HPROXY} -f docker/dev.Dockerfile bin
 
 # push dev image
 .PHONY: push-dev
@@ -94,7 +95,7 @@ deploy-dev/kustomization.yaml:
 	touch $@
 	cd $(@D); kustomize edit add resource ../deploy/kubernetes/cv-webhook;
 ifeq ("$(DEV_K8S)", "kubeadm")
-	cd $(@D); kustomize edit set image juicedata/juicefs-csi-driver=$(DEV_REGISTRY):$(DEV_TAG)
+	cd $(@D); kustomize edit set image juicedata/juicefs-csi-driver=$(DEV_REGISTRY):$(DEV_TAG);
 else
 	cd $(@D); kustomize edit set image juicedata/juicefs-csi-driver=:$(DEV_TAG)
 endif
@@ -105,6 +106,8 @@ deploy-dev/k8s.yaml: deploy-dev/kustomization.yaml deploy/kubernetes/release/*.y
 	# Add .orig suffix only for compactiblity on macOS
 	./hack/dev_update_cv_install_script.sh
 	./scripts/juicefs-csi-cv-webhook-install.sh gen-dev
+	sed -i 's@S_MOUNT_IMAGE@${MOUNT_IMAGE}@g' $@
+	sed -i 's@S_WAIT_IMAGE@$(IMAGE):$(DEV_TAG)@g' $@
 ifeq ("$(DEV_K8S)", "microk8s")
 	sed -i 's@/var/lib/kubelet@/var/snap/microk8s/common/var/lib/kubelet@g' $@
 endif

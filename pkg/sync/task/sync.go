@@ -12,6 +12,7 @@ import (
 
 type PlatformDataSync struct {
 	PodName           string
+	SecretName        string
 	PVName            string
 	NameSpace         string
 	ControllerURL     string
@@ -36,12 +37,20 @@ func (p *PlatformDataSync) NewSyncPod() *corev1.Pod {
 			Annotations: map[string]string{config.SyncPodAnnotationSourcePath: p.SourcePath},
 		},
 		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyNever,
 			Containers: []corev1.Container{
 				{
 					Command:         []string{"sh", "-c", cmd},
 					ImagePullPolicy: corev1.PullIfNotPresent,
 					Image:           Image,
 					Name:            config.SyncContainerName,
+					EnvFrom: []corev1.EnvFromSource{{
+						SecretRef: &corev1.SecretEnvSource{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: p.SecretName,
+							},
+						},
+					}},
 				},
 			},
 			Affinity: &corev1.Affinity{
@@ -61,10 +70,10 @@ func (p *PlatformDataSync) NewSyncPod() *corev1.Pod {
 }
 func (p *PlatformDataSync) buildCmd() string {
 	cmd := ""
-	syncArgs := []string{config.CeMountPath, "myfs=${metaurl}", "sync",
-		fmt.Sprint("%s://%s:%s@%s/%s", p.SourceStorage, p.SourceAccessKey, p.SourceSecretKey, p.SourceBucket, p.SourcePath,
-			fmt.Sprintf("jfs://myfs", path.Join("/", p.SubDir, p.SourcePath, "/"))),
-		"--report-process-addr", p.ControllerURL,
+	syncArgs := []string{"myfs=${metaurl}", config.CeCliPath, "sync",
+		fmt.Sprintf("%s://%s:%s@%s/%s/", p.SourceStorage, p.SourceAccessKey, p.SourceSecretKey, p.SourceBucket, strings.Trim(p.SourcePath, "/")),
+		fmt.Sprintf("jfs://myfs%s/", path.Join("/", p.SubDir, p.SourcePath)),
+		"--report-process-addr", p.ControllerURL, "--pv", p.PVName, "--task-key", p.SourcePath, "--update", "--delete-dst",
 	}
 	cmd = strings.Join(syncArgs, " ")
 	return util.QuoteForShell(cmd)

@@ -37,9 +37,9 @@ var (
 	NodeName           = ""
 	Namespace          = ""
 	PodName            = ""
-	CEMountImage       = "juicedata/mount:ce-nightly" // mount pod ce image
-	EEMountImage       = "juicedata/mount:ee-nightly" // mount pod ee image
-	SyncImage          = "juicedata/mount:ce-nightly" // mount pod ce image
+	CEMountImage       = "juicedata/mount:ce-nightly"      // mount pod ce image
+	EEMountImage       = "juicedata/mount:ee-nightly"      // mount pod ee image
+	SyncWaitImage      = "juicedata/juicefs-csi-driver:v1" // mount pod ce image
 	MountLabels        = ""
 	HostIp             = ""
 	KubeletPort        = ""
@@ -66,7 +66,6 @@ var (
 
 	DstPV                = ""         //sync check target PV
 	SourcePath           = []string{} //sync check source PATH
-	DstPath              = []string{} //sync check target target PATH
 	Mixture              = ""
 	SyncConcurrentNumber = 3 //do sync concurrent number
 	ControllerURL        = ""
@@ -91,7 +90,8 @@ const (
 	JobTypeValue                = "juicefs-job"
 	SyncWaitContainerName       = "jfs-sync-wait"
 	SyncContainerName           = "jfs-sync"
-	SyncPVLabelKey              = "data-set-sync"
+	SyncPVLabelKey              = "discovery-sync"
+	SyncPVAnnotationKey         = "data-set-sync"
 	SyncPVLabelVal              = "true"
 	SyncPodLabelKey             = "data-set-sync-task"
 	SyncLabelPVKey              = "data-set-sync-pv"
@@ -119,8 +119,8 @@ const (
 	CvWebhookName                     = "juicefs-admission-cv-webhook"
 	CvTrue                            = "true"
 	CvFalse                           = "false"
-	CvInject                          = ".juicefs.com/cvInject"
-	CvInjectInitContainer             = ".initContainer" + CvInject
+	CvInject                          = ".juicefs.com/cv-inject"
+	CvInjectInitContainer             = ".init-container" + CvInject
 	CvInjectInitContainerDone         = "done" + CvInjectInitContainer
 	CvInjectInitContainerDoneDisabled = "disable" + CvInjectInitContainer
 
@@ -148,14 +148,15 @@ const (
 	defaultMountPodCpuRequest = "1000m"
 	defaultMountPodMemRequest = "1Gi"
 
-	CheckSyncStatusAPi = "/checkSyncStatus"
-	SyncController     = "sync_controller"
-	PlatformController = "platform_controller"
-	Metaurl            = "metaurl"
-	CentralStorage     = "central_storage"
-	CentralBucket      = "central_bucket"
-	CentralAccessKey   = "central_access_key"
-	CentralSecretKey   = "central_secret_key"
+	CheckSyncStatusApi  = "/checkSyncStatus"
+	SyncProcessStateApi = "/processState"
+	SyncController      = "sync_controller"
+	PlatformController  = "platform_controller"
+	Metaurl             = "metaurl"
+	CentralStorage      = "central_storage"
+	CentralBucket       = "central_bucket"
+	CentralAccessKey    = "central_access_key"
+	CentralSecretKey    = "central_secret_key"
 )
 
 var PodLocks [1024]sync.Mutex

@@ -357,7 +357,7 @@ spec:
   ports:
   - name: https-rest
     port: 443
-    targetPort: 9447
+    targetPort: 9444
   selector:
     app: juicefs-csi-controller
     app.kubernetes.io/instance: juicefs-csi-driver
@@ -395,7 +395,7 @@ metadata:
   name: juicefs-csi-controller
   namespace: kube-system
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: juicefs-csi-controller
@@ -421,6 +421,10 @@ spec:
         - --cv-webhook=true
         - --mixture=cloud
         env:
+        - name: JUICEFS_CE_MOUNT_IMAGE
+          value: S_MOUNT_IMAGE
+        - name: JUICEFS_SYNC_WAIT_IMAGE
+          value: S_WAIT_IMAGE
         - name: CSI_ENDPOINT
           value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
         - name: NODE_NAME
@@ -439,7 +443,9 @@ spec:
           value: /var/lib/juicefs/volume
         - name: JUICEFS_CONFIG_PATH
           value: /var/lib/juicefs/config
-        image: juicedata/juicefs-csi-driver:dev-8e10c08-dirty
+        - name: ENABLE_APISERVER_LIST_CACHE
+          value: "true"
+        image: juicedata/juicefs-csi-driver:dev-2fbf1ff-dirty
         livenessProbe:
           failureThreshold: 5
           httpGet:
@@ -569,6 +575,10 @@ spec:
         - --v=6
         - --enable-manager=true
         env:
+        - name: JUICEFS_CE_MOUNT_IMAGE
+          value: S_MOUNT_IMAGE
+        - name: JUICEFS_SYNC_WAIT_IMAGE
+          value: S_WAIT_IMAGE
         - name: CSI_ENDPOINT
           value: unix:/csi/csi.sock
         - name: NODE_NAME
@@ -593,7 +603,9 @@ spec:
           value: /var/lib/juicefs/volume
         - name: JUICEFS_CONFIG_PATH
           value: /var/lib/juicefs/config
-        image: juicedata/juicefs-csi-driver:dev-8e10c08-dirty
+        - name: ENABLE_APISERVER_LIST_CACHE
+          value: "true"
+        image: juicedata/juicefs-csi-driver:dev-2fbf1ff-dirty
         lifecycle:
           preStop:
             exec:
@@ -732,7 +744,7 @@ webhooks:
   name: sync.inject.juicefs.com
   namespaceSelector:
     matchLabels:
-      juicefs.com/enable-injection: "true"
+      data-set-sync/enable-injection: "true"
   rules:
   - apiGroups:
     - ""

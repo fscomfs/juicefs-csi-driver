@@ -147,6 +147,12 @@ func (d *nodeService) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 	if util.UseUnionFileSystem(pvcName, volumeID, targetPod) {
 		lowerPath := util.UnionFileSystemSubPaths(bindSource, pvcName, targetPod)
+		for i := range lowerPath {
+			_, err := jfs.CreateVol(ctx, volumeID, strings.TrimLeft(lowerPath[i], jfs.GetBasePath()))
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "Could not create volume: %s, %v", volumeID, err)
+			}
+		}
 		podId, err := util.TargetPathPodId(target)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "volumeId:%s targetPath can no get podId %v", volumeID, err)

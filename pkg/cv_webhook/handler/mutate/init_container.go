@@ -81,11 +81,10 @@ func (s *InitContainerMutate) mutate(ctx context.Context, pod *corev1.Pod, pair 
 
 	jfsSetting.Attr.Namespace = pod.Namespace
 	sourcePaths := []string{}
-	if subPath, ok := pod.Annotations["subpath-"+pair.PV.Name]; ok {
+	if subPath, ok := pod.Annotations["subpath-"+pair.PVC.Name]; ok {
 		sourcePaths = strings.Split(subPath, ";")
 	}
 	jfsSetting.Attr.SourcePath = sourcePaths
-	jfsSetting.SecretName = pair.PVC.Name + "-jfs-secret"
 	s.jfsSetting = jfsSetting
 	builder := NewBuilder(jfsSetting, pair, secrets)
 	// gen init container

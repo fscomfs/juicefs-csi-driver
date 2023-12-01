@@ -22,10 +22,8 @@ import (
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/klog"
 	"os"
-	"os/signal"
-	"syscall"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 func init() {
@@ -39,7 +37,7 @@ func parseSyncWaitConfig() {
 	if url := os.Getenv("CONTROLLER_URL"); url != "" {
 		config.ControllerURL = url
 	} else {
-		config.ControllerURL = "http://sync-controller." + config.Namespace + ".svc.cluster.local"
+		config.ControllerURL = "http://sync-controller.kube-system.svc.cluster.local"
 	}
 
 }
@@ -57,16 +55,7 @@ func syncWaitCmd() *cobra.Command {
 }
 func syncWaitRun() {
 	parseSyncWaitConfig()
-	signal.Ignore(syscall.SIGPIPE)
-	signalChan := make(chan os.Signal, 10)
-	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
-	go func() {
-		for {
-			sig := <-signalChan
-			klog.V(5).Infof("Received signal %s, exiting...", sig.String())
-			os.Exit(1)
-		}
-	}()
+	ctx := ctrl.SetupSignalHandler()
 	checkStatus := sync.CheckSyncStatus{PV: config.DstPV}
-	checkStatus.Run()
+	checkStatus.Run(ctx)
 }

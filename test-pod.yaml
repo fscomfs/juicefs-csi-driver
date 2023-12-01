@@ -4,7 +4,7 @@ metadata:
   name: test-pod
   namespace: default
   annotations:
-    subpath-test-pvc: "data/www;data/qqq"
+    subpath-test-pvc: "data-set-1/v1/000/1;data-set-1/v3/train/3"
     union-test-pvc: "true"
     sync-test-pvc: "true"
 spec:
@@ -14,7 +14,7 @@ spec:
         - sleep 3600
       command:
         - /bin/sh
-      image: juicedata/juicefs-csi-driver:nightly
+      image: registry.cn-shenzhen.aliyuncs.com/fscomfs/mount:v1.1.0
       name: app
       volumeMounts:
         - mountPath: /home/data

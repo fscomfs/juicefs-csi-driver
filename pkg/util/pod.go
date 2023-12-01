@@ -43,12 +43,11 @@ func IsPodReady(pod *corev1.Pod) bool {
 
 func IsPodRunning(pod *corev1.Pod) bool {
 	if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodPending {
-		return true
-	}
-	for _, containerStatus := range pod.Status.ContainerStatuses {
-		if containerStatus.State.Running != nil || containerStatus.State.Terminated == nil {
-			// If any container is running or not terminated, consider the Pod as running or starting
-			return true
+		for _, containerStatus := range pod.Status.ContainerStatuses {
+			if containerStatus.State.Running != nil || containerStatus.State.Terminated == nil {
+				// If any container is running or not terminated, consider the Pod as running or starting
+				return true
+			}
 		}
 	}
 	return false
@@ -265,7 +264,12 @@ func UnionFileSystemSubPaths(bindSource string, pvcName string, pod *corev1.Pod)
 		if k == fmt.Sprintf("subpath-%s", pvcName) {
 			if val != "" {
 				for _, v := range strings.Split(val, ";") {
-					subpath = append(subpath, path.Join(bindSource, v))
+					if !strings.HasSuffix(v, "/") {
+						subpath = append(subpath, path.Join(bindSource, path.Dir(v)))
+					} else {
+						subpath = append(subpath, path.Join(bindSource, v))
+
+					}
 				}
 			}
 		}

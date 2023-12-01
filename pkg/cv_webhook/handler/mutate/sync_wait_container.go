@@ -33,7 +33,7 @@ func (r *Builder) NewSyncWaitContainer() *corev1.Container {
 func (r *Builder) getCommand() string {
 	cmd := ""
 	klog.V(5).Infof("SyncWait: syncWait %v", r.jfsSetting.Attr.SourcePath)
-	syncArgs := []string{"juicefs-csi", "syncWait", "--dst-pv", r.pair.PV.Name}
+	syncArgs := []string{"juicefs-csi-driver", "syncWait", "--dst-pv", r.pair.PV.Name}
 	for _, s := range r.jfsSetting.Attr.SourcePath {
 		syncArgs = append(syncArgs, "--source-path", s)
 	}

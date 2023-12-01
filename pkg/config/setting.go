@@ -277,7 +277,7 @@ func ParseSetting(secrets, volCtx map[string]string, options []string, usePod bo
 		jfsSetting.Attr.Image = EEMountImage
 	}
 
-	jfsSetting.Attr.SyncWaitImage = SyncImage
+	jfsSetting.Attr.SyncWaitImage = SyncWaitImage
 
 	if volCtx != nil && volCtx[mountPodImageKey] != "" {
 		jfsSetting.Attr.Image = volCtx[mountPodImageKey]

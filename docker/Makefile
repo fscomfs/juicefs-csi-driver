@@ -12,26 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-IMAGE?=juicedata/juicefs-csi-driver
-REGISTRY?=docker.io
+IMAGE?=fscomfs/juicefs-csi-driver
+REGISTRY?=registry.cn-shenzhen.aliyuncs.com
 TARGETARCH?=amd64
-FUSE_IMAGE=juicedata/juicefs-fuse
-JUICEFS_IMAGE?=juicedata/mount
+FUSE_IMAGE?=fscomfs/juicefs-fuse
+JUICEFS_IMAGE?=fscomfs/mount
 VERSION=$(shell git describe --tags --match 'v*' --always --dirty)
 GIT_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 GIT_COMMIT?=$(shell git rev-parse HEAD)
 DEV_TAG=dev-$(shell git describe --always --dirty)
 BUILD_DATE?=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
-PKG=github.com/juicedata/juicefs-csi-driver
+PKG=github.com/fscomfs/juicefs-csi-driver
 LDFLAGS?="-X ${PKG}/pkg/driver.driverVersion=${VERSION} -X ${PKG}/pkg/driver.gitCommit=${GIT_COMMIT} -X ${PKG}/pkg/driver.buildDate=${BUILD_DATE} -s -w"
 GO111MODULE=on
 JUICEFS_CSI_LATEST_VERSION=$(shell git describe --tags --match 'v*' | grep -oE 'v[0-9]+\.[0-9][0-9]*(\.[0-9]+(-[0-9a-z]+)?)?')
 IMAGE_VERSION_ANNOTATED=$(IMAGE):$(VERSION)-juicefs$(shell docker run --entrypoint=/usr/bin/juicefs $(IMAGE):$(VERSION) version | cut -d' ' -f3)
+HPROXY?=http://192.168.67.70:7890
 
-JUICEFS_CE_LATEST_VERSION=$(shell curl -fsSL https://api.github.com/repos/juicedata/juicefs/releases/latest | grep tag_name | grep -oE 'v[0-9]+\.[0-9][0-9]*(\.[0-9]+(-[0-9a-z]+)?)?')
+JUICEFS_CE_LATEST_VERSION=$(shell curl -fsSL https://api.github.com/repos/fscomfs/juicefs/releases/latest | grep tag_name | grep -oE 'v[0-9]+\.[0-9][0-9]*(\.[0-9]+(-[0-9a-z]+)?)?')
 JUICEFS_EE_LATEST_VERSION=$(shell curl -sSL https://juicefs.com/static/juicefs -o juicefs-ee && chmod +x juicefs-ee && ./juicefs-ee version | cut -d' ' -f3)
 JFS_CHAN=${JFSCHAN}
-JUICEFS_REPO_URL?=https://github.com/juicedata/juicefs
+JUICEFS_REPO_URL?=https://github.com/fscomfs/juicefs
 JUICEFS_REPO_REF?=$(JUICEFS_CE_LATEST_VERSION)
 MOUNT_TAG=${MOUNTTAG}
 CE_VERSION=${CEVERSION}
@@ -107,15 +108,25 @@ csi-slim-image-version:
 # build & push juicefs nightly image
 .PHONY: ce-image
 ce-image:
-	docker build -f ce.juicefs.Dockerfile -t $(REGISTRY)/$(JUICEFS_IMAGE):$(CE_VERSION) \
-        --build-arg JUICEFS_REPO_REF=$(CE_JUICEFS_VERSION) --build-arg TARGETARCH=$(TARGETARCH) .
-	docker push $(REGISTRY)/$(JUICEFS_IMAGE):$(CE_VERSION)
+	docker build --no-cache -f ce.juicefs.Dockerfile -t $(REGISTRY)/$(JUICEFS_IMAGE):$(CE_VERSION) \
+        --build-arg JUICEFS_REPO_REF=$(CE_JUICEFS_VERSION) --build-arg TARGETARCH=$(TARGETARCH)  \
+         --build-arg=HTTPS_PROXY=$(HPROXY)  --build-arg=CE_VERSION=$(CE_VERSION) --build-arg=REGISTRY=$(REGISTRY) .
+#	docker push $(REGISTRY)/$(JUICEFS_IMAGE):$(CE_VERSION)
 
 .PHONY: ce-image-buildx
 ce-image-buildx:
 	docker buildx build -f ce.juicefs.Dockerfile -t $(REGISTRY)/$(JUICEFS_IMAGE):$(CE_VERSION) \
-	    --build-arg=JUICEFS_REPO_REF=$(CE_JUICEFS_VERSION) \
+	    --build-arg=JUICEFS_REPO_REF=$(CE_JUICEFS_VERSION) --build-arg=HTTPS_PROXY=$(HPROXY)  --build-arg=REGISTRY=$(REGISTRY) \
+	    --build-arg=CE_VERSION=$(CE_VERSION) \
 		--platform linux/amd64,linux/arm64 . --push
+.PHONY: base-image-buildx
+base-image-buildx:
+	docker buildx build -f ce.juicefs.base.Dockerfile -t $(REGISTRY)/$(JUICEFS_IMAGE):$(CE_VERSION)-base \
+	     --build-arg=CE_VERSION=$(CE_VERSION) --build-arg=HTTPS_PROXY=$(HPROXY) --build-arg=REGISTRY=$(REGISTRY)\
+		 --platform linux/amd64,linux/arm64 . --push
+	docker buildx build -f ce.juicefs.base-build.Dockerfile -t $(REGISTRY)/$(JUICEFS_IMAGE):$(CE_VERSION)-base-build \
+    	    --build-arg=CE_VERSION=$(CE_VERSION) --build-arg=HTTPS_PROXY=$(HPROXY) --build-arg=REGISTRY=$(REGISTRY) \
+    		--platform linux/amd64,linux/arm64 . --push
 
 ################# JuiceFS ee image #######################
 

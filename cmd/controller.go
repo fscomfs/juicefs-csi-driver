@@ -86,6 +86,9 @@ func parseControllerConfig() {
 	if mountPodImage := os.Getenv("JUICEFS_EE_MOUNT_IMAGE"); mountPodImage != "" {
 		config.EEMountImage = mountPodImage
 	}
+	if syncWaitImage := os.Getenv("JUICEFS_SYNC_WAIT_IMAGE"); syncWaitImage != "" {
+		config.SyncWaitImage = syncWaitImage
+	}
 	if mountPodImage := os.Getenv("JUICEFS_MOUNT_IMAGE"); mountPodImage != "" {
 		// check if it's CE or EE
 		hasCE, hasEE := util.ImageResol(mountPodImage)
@@ -117,11 +120,17 @@ func parseControllerConfig() {
 			Spec: ds.Spec.Template.Spec,
 		}
 	}
+	if config.CvWebhook {
+		if url := os.Getenv("CONTROLLER_URL"); url != "" {
+			config.ControllerURL = url
+		} else {
+			config.ControllerURL = "http://sync-controller." + config.Namespace + ".svc.cluster.local"
+		}
+	}
 }
 
 func controllerRun() {
 	parseControllerConfig()
-
 	if version {
 		info, err := driver.GetVersionJSON()
 		if err != nil {
