@@ -24,6 +24,7 @@ import (
 	"github.com/juicedata/juicefs-csi-driver/pkg/util"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
+	"io/ioutil"
 	"k8s.io/klog"
 	"os"
 	"os/exec"
@@ -213,9 +214,14 @@ func (u *unionFs) UnionUnmount(ctx context.Context, mountPath string) error {
 	if err := unix.Unmount(mountPath, 0); err != nil {
 		return err
 	}
-	base := path.Join(unionBashPath, u.podId)
+	base := path.Join(unionBashPath, u.podId, u.uniqueId)
 	if err := os.RemoveAll(base); err != nil {
 		klog.Errorf("[UnionUnmount] remove rw path:%s ,err:%v", base, err)
+	}
+	if files, err := ioutil.ReadDir(path.Join(unionBashPath, u.podId)); err == nil && len(files) == 0 {
+		if err := os.RemoveAll(path.Join(unionBashPath, u.podId)); err != nil {
+			klog.Errorf("[UnionUnmount] remove rw path:%s ,err:%v", base, err)
+		}
 	}
 	return nil
 }

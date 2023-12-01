@@ -445,7 +445,7 @@ spec:
           value: /var/lib/juicefs/config
         - name: ENABLE_APISERVER_LIST_CACHE
           value: "true"
-        image: juicedata/juicefs-csi-driver:dev-2fbf1ff-dirty
+        image: juicedata/juicefs-csi-driver:dev-a94df79
         livenessProbe:
           failureThreshold: 5
           httpGet:
@@ -605,7 +605,7 @@ spec:
           value: /var/lib/juicefs/config
         - name: ENABLE_APISERVER_LIST_CACHE
           value: "true"
-        image: juicedata/juicefs-csi-driver:dev-2fbf1ff-dirty
+        image: juicedata/juicefs-csi-driver:dev-a94df79
         lifecycle:
           preStop:
             exec:
