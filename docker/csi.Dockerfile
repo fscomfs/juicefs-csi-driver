@@ -43,6 +43,6 @@ RUN /bin/sh -c 'if [ "$TARGETARCH" = "amd64" ]; then \
     else \
         cp /other_tool/fuse-overlayfs-aarch64 /usr/bin/fuse-overlayfs  && chmod +x /usr/bin/fuse-overlayfs; \
        fi' \
-RUN unset https_proxy
-RUN unset http_proxy
+ENV https_proxy=
+ENV http_proxy=
 ENTRYPOINT ["/sbin/tini", "--", "juicefs-csi-driver"]

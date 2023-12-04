@@ -19,5 +19,6 @@ RUN /bin/sh -c 'if [ "$TARGETARCH" = "amd64" ]; then \
         wget https://github.com/containers/fuse-overlayfs/releases/download/v1.13/fuse-overlayfs-aarch64 -O /usr/bin/fuse-overlayfs && chmod +x /usr/bin/fuse-overlayfs; \
        fi'
 COPY juicefs-csi-driver /usr/local/bin/juicefs-csi-driver
-
+ENV https_proxy=
+ENV http_proxy=
 ENTRYPOINT ["juicefs-csi-driver"]

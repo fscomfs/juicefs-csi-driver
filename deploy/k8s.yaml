@@ -353,7 +353,7 @@ spec:
         - name: JUICEFS_CE_MOUNT_IMAGE
           value: registry.cn-shenzhen.aliyuncs.com/fscomfs/mount:v1.1.0-cv
         - name: JUICEFS_SYNC_WAIT_IMAGE
-          value: registry.cn-shenzhen.aliyuncs.com/fscomfs/juicefs-csi-driver:dev-bed259b
+          value: registry.cn-shenzhen.aliyuncs.com/fscomfs/juicefs-csi-driver:dev-a3299a0
         - name: CSI_ENDPOINT
           value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
         - name: NODE_NAME
@@ -374,7 +374,7 @@ spec:
           value: /var/lib/juicefs/config
         - name: ENABLE_APISERVER_LIST_CACHE
           value: "true"
-        image: registry.cn-shenzhen.aliyuncs.com/fscomfs/juicefs-csi-driver:dev-bed259b
+        image: registry.cn-shenzhen.aliyuncs.com/fscomfs/juicefs-csi-driver:dev-a3299a0
         livenessProbe:
           failureThreshold: 5
           httpGet:
@@ -507,7 +507,7 @@ spec:
         - name: JUICEFS_CE_MOUNT_IMAGE
           value: registry.cn-shenzhen.aliyuncs.com/fscomfs/mount:v1.1.0-cv
         - name: JUICEFS_SYNC_WAIT_IMAGE
-          value: registry.cn-shenzhen.aliyuncs.com/fscomfs/juicefs-csi-driver:dev-bed259b
+          value: registry.cn-shenzhen.aliyuncs.com/fscomfs/juicefs-csi-driver:dev-a3299a0
         - name: CSI_ENDPOINT
           value: unix:/csi/csi.sock
         - name: NODE_NAME
@@ -534,7 +534,7 @@ spec:
           value: /var/lib/juicefs/config
         - name: ENABLE_APISERVER_LIST_CACHE
           value: "true"
-        image: registry.cn-shenzhen.aliyuncs.com/fscomfs/juicefs-csi-driver:dev-bed259b
+        image: registry.cn-shenzhen.aliyuncs.com/fscomfs/juicefs-csi-driver:dev-a3299a0
         lifecycle:
           preStop:
             exec:
