@@ -20,10 +20,7 @@ ARG GOPROXY
 ARG JUICEFS_REPO_BRANCH=cvmart-main
 ARG JUICEFS_REPO_REF=${JUICEFS_REPO_BRANCH}
 ARG JUICEFS_CSI_REPO_REF=v0.22.1-cvmart
-ARG HPROXY
 ENV GOPROXY=${GOPROXY:-https://proxy.golang.org}
-ENV https_proxy=${HPROXY}
-ENV http_proxy=${HPROXY}
 WORKDIR /workspace
 COPY . .
 RUN make
@@ -32,22 +29,18 @@ ENV STATIC=1
 FROM alpine:3.15.5
 
 ARG JUICEFS_MOUNT_IMAGE
-ARG HPROXY
 ENV JUICEFS_MOUNT_IMAGE=${JUICEFS_MOUNT_IMAGE}
-ENV https_proxy=${HPROXY}
-ENV http_proxy=${HPROXY}
 RUN mkdir -p /other_tool
 COPY --from=builder /workspace/bin/juicefs-csi-driver /usr/local/bin/juicefs-csi-driver
 COPY --from=builder /workspace/other_tool/ /other_tool/
 COPY --from=juicebinary /usr/local/bin/juicefs /usr/local/bin/juicefs
 RUN ln -s /usr/local/bin/juicefs /bin/mount.juicefs
 RUN apk add --no-cache tini
-
 RUN /bin/sh -c 'if [ "$TARGETARCH" = "amd64" ]; then \
         cp /other_tool/fuse-overlayfs-x86_64 /usr/bin/fuse-overlayfs  && chmod +x /usr/bin/fuse-overlayfs; \
     else \
         cp /other_tool/fuse-overlayfs-aarch64 /usr/bin/fuse-overlayfs  && chmod +x /usr/bin/fuse-overlayfs; \
        fi' \
-ENV https_proxy=""
-ENV http_proxy=""
+ENV unset https_proxy
+ENV unset http_proxy
 ENTRYPOINT ["/sbin/tini", "--", "juicefs-csi-driver"]
