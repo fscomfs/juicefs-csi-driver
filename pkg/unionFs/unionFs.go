@@ -211,9 +211,6 @@ func (u *unionFs) UnionMount(ctx context.Context, target string) error {
 }
 
 func (u *unionFs) UnionUnmount(ctx context.Context, mountPath string) error {
-	if err := unix.Unmount(mountPath, 0); err != nil {
-		return err
-	}
 	base := path.Join(unionBashPath, u.podId, u.uniqueId)
 	if err := os.RemoveAll(base); err != nil {
 		klog.Errorf("[UnionUnmount] remove rw path:%s ,err:%v", base, err)

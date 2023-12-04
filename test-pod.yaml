@@ -14,7 +14,7 @@ spec:
         - sleep 3600
       command:
         - /bin/sh
-      image: registry.cn-shenzhen.aliyuncs.com/fscomfs/mount:v1.1.0
+      image: 192.168.1.76:8099/evtrain/cvmart-daemon:v1.0
       name: app
       volumeMounts:
         - mountPath: /home/data
