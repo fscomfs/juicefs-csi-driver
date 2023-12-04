@@ -36,15 +36,17 @@ ARG HPROXY
 ENV JUICEFS_MOUNT_IMAGE=${JUICEFS_MOUNT_IMAGE}
 ENV https_proxy=${HPROXY}
 ENV http_proxy=${HPROXY}
+RUN mkdir -p /other_tool
 COPY --from=builder /workspace/bin/juicefs-csi-driver /usr/local/bin/juicefs-csi-driver
+COPY --from=builder /workspace/other_tool/ /other_tool/
 COPY --from=juicebinary /usr/local/bin/juicefs /usr/local/bin/juicefs
 RUN ln -s /usr/local/bin/juicefs /bin/mount.juicefs
 RUN apk add --no-cache tini
 
 RUN /bin/sh -c 'if [ "$TARGETARCH" = "amd64" ]; then \
-        wget https://github.com/containers/fuse-overlayfs/releases/download/v1.13/fuse-overlayfs-x86_64 -O /usr/bin/fuse-overlayfs && chmod +x /usr/bin/fuse-overlayfs; \
+        cp /other_tool/fuse-overlayfs-x86_64 /usr/bin/fuse-overlayfs  && chmod +x /usr/bin/fuse-overlayfs; \
     else \
-        wget https://github.com/containers/fuse-overlayfs/releases/download/v1.13/fuse-overlayfs-aarch64 -O /usr/bin/fuse-overlayfs && chmod +x /usr/bin/fuse-overlayfs; \
+        cp /other_tool/fuse-overlayfs-aarch64 /usr/bin/fuse-overlayfs  && chmod +x /usr/bin/fuse-overlayfs; \
        fi' \
 ENV https_proxy=""
 ENV http_proxy=""
