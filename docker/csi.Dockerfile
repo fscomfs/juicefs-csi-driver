@@ -27,7 +27,7 @@ RUN make
 ENV STATIC=1
 
 FROM alpine:3.15.5
-
+ARG HPROXY
 ARG JUICEFS_MOUNT_IMAGE
 ENV JUICEFS_MOUNT_IMAGE=${JUICEFS_MOUNT_IMAGE}
 RUN mkdir -p /other_tool
@@ -35,12 +35,14 @@ COPY --from=builder /workspace/bin/juicefs-csi-driver /usr/local/bin/juicefs-csi
 COPY --from=builder /workspace/other_tool/ /other_tool/
 COPY --from=juicebinary /usr/local/bin/juicefs /usr/local/bin/juicefs
 RUN ln -s /usr/local/bin/juicefs /bin/mount.juicefs
+ENV https_proxy=${HPROXY}
+ENV http_proxy=${HPROXY}
 RUN apk add --no-cache tini
 RUN /bin/sh -c 'if [ "$TARGETARCH" = "amd64" ]; then \
         cp /other_tool/fuse-overlayfs-x86_64 /usr/bin/fuse-overlayfs  && chmod +x /usr/bin/fuse-overlayfs; \
     else \
         cp /other_tool/fuse-overlayfs-aarch64 /usr/bin/fuse-overlayfs  && chmod +x /usr/bin/fuse-overlayfs; \
        fi' \
-ENV unset https_proxy
-ENV unset http_proxy
+RUN unset https_proxy
+RUN unset http_proxy
 ENTRYPOINT ["/sbin/tini", "--", "juicefs-csi-driver"]
