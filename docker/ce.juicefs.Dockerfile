@@ -13,7 +13,8 @@
 # limitations under the License.
 ARG REGISTRY
 ARG CE_VERSION
-FROM $REGISTRY/fscomfs/mount:${CE_VERSION}-base-build as binaryimage
+ARG BASE_VERSION
+FROM $REGISTRY/fscomfs/mount:${BASE_VERSION}-base-build as binaryimage
 ARG GOPROXY
 ARG TARGETARCH
 ARG JUICEFS_REPO_URL=https://github.com/fscomfs/juicefs
@@ -32,7 +33,7 @@ ENV http_proxy=""
 # ----------
 ARG REGISTRY
 ARG CE_VERSION
-FROM $REGISTRY/fscomfs/mount:${CE_VERSION}-base
+FROM $REGISTRY/fscomfs/mount:${BASE_VERSION}-base
 ARG TARGETARCH
 COPY --from=binaryimage /usr/local/bin/juicefs /usr/local/bin/juicefs
 RUN ln -s /usr/local/bin/juicefs /bin/mount.juicefs && /usr/local/bin/juicefs --version

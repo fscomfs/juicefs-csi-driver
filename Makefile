@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-IMAGE?=juicedata/juicefs-csi-driver
-MOUNT_IMAGE=registry.cn-shenzhen.aliyuncs.com/fscomfs/mount:v1.1.0
-REGISTRY?=docker.io
+IMAGE?=fscomfs/juicefs-csi-driver
+MOUNT_IMAGE=registry.cn-shenzhen.aliyuncs.com/fscomfs/mount:v1.1.0-cv
+REGISTRY?=registry.cn-shenzhen.aliyuncs.com
 TARGETARCH?=amd64
 VERSION=$(shell git describe --tags --match 'v*' --always --dirty)
 GIT_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
@@ -75,6 +75,13 @@ uninstall: yaml
 image-dev: juicefs-csi-driver
 	docker build --build-arg TARGETARCH=$(TARGETARCH) -t $(IMAGE):$(DEV_TAG) --build-arg=https_proxy=${HPROXY} -f docker/dev.Dockerfile bin
 
+.PHONY: image-buildx
+image-buildx:
+	docker buildx build  -t ${REGISTRY}/$(IMAGE):$(DEV_TAG) -f docker/csi.Dockerfile \
+	--build-arg=https_proxy=${HPROXY} --build-arg=JUICEFS_MOUNT_IMAGE=${MOUNT_IMAGE} \
+	--platform linux/amd64,linux/arm64 . --push
+
+
 # push dev image
 .PHONY: push-dev
 push-dev:
@@ -97,7 +104,7 @@ deploy-dev/kustomization.yaml:
 ifeq ("$(DEV_K8S)", "kubeadm")
 	cd $(@D); kustomize edit set image juicedata/juicefs-csi-driver=$(DEV_REGISTRY):$(DEV_TAG);
 else
-	cd $(@D); kustomize edit set image juicedata/juicefs-csi-driver=:$(DEV_TAG)
+	cd $(@D); kustomize edit set image ${REGISTRY}/fscomfs/juicefs-csi-driver=:$(DEV_TAG)
 endif
 
 deploy-dev/k8s.yaml: deploy-dev/kustomization.yaml deploy/kubernetes/release/*.yaml
@@ -107,14 +114,14 @@ deploy-dev/k8s.yaml: deploy-dev/kustomization.yaml deploy/kubernetes/release/*.y
 	./hack/dev_update_cv_install_script.sh
 	./scripts/juicefs-csi-cv-webhook-install.sh gen-dev
 	sed -i 's@S_MOUNT_IMAGE@${MOUNT_IMAGE}@g' $@
-	sed -i 's@S_WAIT_IMAGE@$(IMAGE):$(DEV_TAG)@g' $@
+	sed -i 's@S_WAIT_IMAGE@${REGISTRY}/$(IMAGE):$(DEV_TAG)@g' $@
 ifeq ("$(DEV_K8S)", "microk8s")
 	sed -i 's@/var/lib/kubelet@/var/snap/microk8s/common/var/lib/kubelet@g' $@
 endif
 ifeq ("$(DEV_K8S)", "kubeadm")
-	sed -i.orig 's@juicedata/juicefs-csi-driver.*$$@$(DEV_REGISTRY):$(DEV_TAG)@g' $@
+	sed -i.orig 's@juicedata/juicefs-csi-driver.*$$@$(REGISTRY)/fscomfs/juicefs-csi-driver:$(DEV_TAG)@g' $@
 else
-	sed -i.orig 's@juicedata/juicefs-csi-driver.*$$@juicedata/juicefs-csi-driver:$(DEV_TAG)@g' $@
+	sed -i.orig 's@juicedata/juicefs-csi-driver.*$$@$(REGISTRY)/fscomfs/juicefs-csi-driver:$(DEV_TAG)@g' $@
 endif
 
 

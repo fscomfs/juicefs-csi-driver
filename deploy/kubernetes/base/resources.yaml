@@ -286,11 +286,11 @@ spec:
             periodSeconds: 10
             failureThreshold: 5
         - name: csi-provisioner
-          image: quay.io/k8scsi/csi-provisioner:v1.6.0
+          image: k8s.dockerproxy.com/sig-storage/csi-provisioner:v2.2.2
           args:
             - --csi-address=$(ADDRESS)
             - --timeout=60s
-            - --enable-leader-election
+            - --leader-election
             - --v=5
             # # NOTE: juicefs is not bound to available zones, kind of topology agnostic
             # - --feature-gates=Topology=true
@@ -301,7 +301,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-resizer
-          image: quay.io/k8scsi/csi-resizer:v1.0.1
+          image: k8s.dockerproxy.com/sig-storage/csi-resizer:v1.8.0
           args:
             - --csi-address=$(ADDRESS)
             - --leader-election
@@ -313,7 +313,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: liveness-probe
-          image: quay.io/k8scsi/livenessprobe:v1.1.0
+          image: k8s.dockerproxy.com/sig-storage/livenessprobe:v2.6.0
           args:
             - --csi-address=$(ADDRESS)
             - --health-port=$(HEALTH_PORT)
@@ -435,7 +435,7 @@ spec:
             periodSeconds: 10
             failureThreshold: 5
         - name: node-driver-registrar
-          image: quay.io/k8scsi/csi-node-driver-registrar:v2.1.0
+          image: k8s.dockerproxy.com/sig-storage/csi-node-driver-registrar:v2.5.0
           args:
             - --csi-address=$(ADDRESS)
             - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
@@ -451,7 +451,7 @@ spec:
             - name: registration-dir
               mountPath: /registration
         - name: liveness-probe
-          image: quay.io/k8scsi/livenessprobe:v1.1.0
+          image: k8s.dockerproxy.com/sig-storage/livenessprobe:v2.6.0
           args:
             - --csi-address=$(ADDRESS)
             - --health-port=$(HEALTH_PORT)

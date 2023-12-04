@@ -115,9 +115,9 @@ ce-image:
 
 .PHONY: ce-image-buildx
 ce-image-buildx:
-	docker buildx build -f ce.juicefs.Dockerfile -t $(REGISTRY)/$(JUICEFS_IMAGE):$(CE_VERSION) \
+	docker buildx build  -f ce.juicefs.Dockerfile -t $(REGISTRY)/$(JUICEFS_IMAGE):$(CE_VERSION) \
 	    --build-arg=JUICEFS_REPO_REF=$(CE_JUICEFS_VERSION) --build-arg=HTTPS_PROXY=$(HPROXY)  --build-arg=REGISTRY=$(REGISTRY) \
-	    --build-arg=CE_VERSION=$(CE_VERSION) \
+	    --build-arg=CE_VERSION=$(CE_VERSION) --build-arg=BASE_VERSION=$(BASE_VERSION)\
 		--platform linux/amd64,linux/arm64 . --push
 .PHONY: base-image-buildx
 base-image-buildx:

@@ -445,7 +445,7 @@ spec:
           value: /var/lib/juicefs/config
         - name: ENABLE_APISERVER_LIST_CACHE
           value: "true"
-        image: juicedata/juicefs-csi-driver:dev-a94df79
+        image: juicedata/juicefs-csi-driver:dev-b53cf29
         livenessProbe:
           failureThreshold: 5
           httpGet:
@@ -491,7 +491,7 @@ spec:
         env:
         - name: ADDRESS
           value: /var/lib/csi/sockets/pluginproxy/csi.sock
-        image: quay.io/k8scsi/csi-provisioner:v1.6.0
+        image: k8s.dockerproxy.com/sig-storage/csi-provisioner:v2.2.2
         name: csi-provisioner
         volumeMounts:
         - mountPath: /var/lib/csi/sockets/pluginproxy/
@@ -503,7 +503,7 @@ spec:
         env:
         - name: ADDRESS
           value: /var/lib/csi/sockets/pluginproxy/csi.sock
-        image: quay.io/k8scsi/csi-resizer:v1.0.1
+        image: k8s.dockerproxy.com/sig-storage/csi-resizer:v1.8.0
         name: csi-resizer
         volumeMounts:
         - mountPath: /var/lib/csi/sockets/pluginproxy/
@@ -516,7 +516,7 @@ spec:
           value: /csi/csi.sock
         - name: HEALTH_PORT
           value: "9909"
-        image: quay.io/k8scsi/livenessprobe:v1.1.0
+        image: k8s.dockerproxy.com/sig-storage/livenessprobe:v2.6.0
         name: liveness-probe
         volumeMounts:
         - mountPath: /csi
@@ -605,7 +605,7 @@ spec:
           value: /var/lib/juicefs/config
         - name: ENABLE_APISERVER_LIST_CACHE
           value: "true"
-        image: juicedata/juicefs-csi-driver:dev-a94df79
+        image: juicedata/juicefs-csi-driver:dev-b53cf29
         lifecycle:
           preStop:
             exec:
@@ -658,7 +658,7 @@ spec:
           value: /csi/csi.sock
         - name: DRIVER_REG_SOCK_PATH
           value: /var/lib/kubelet/csi-plugins/csi.juicefs.com/csi.sock
-        image: quay.io/k8scsi/csi-node-driver-registrar:v2.1.0
+        image: k8s.dockerproxy.com/sig-storage/csi-node-driver-registrar:v2.5.0
         name: node-driver-registrar
         volumeMounts:
         - mountPath: /csi
@@ -673,7 +673,7 @@ spec:
           value: /csi/csi.sock
         - name: HEALTH_PORT
           value: "9909"
-        image: quay.io/k8scsi/livenessprobe:v1.1.0
+        image: k8s.dockerproxy.com/sig-storage/livenessprobe:v2.6.0
         name: liveness-probe
         volumeMounts:
         - mountPath: /csi
