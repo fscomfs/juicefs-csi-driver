@@ -20,7 +20,7 @@ tmp_file_with_certmanager="webhook-with-certmanager.yaml"
 tmp_install_script="juicefs-csi-cv-webhook-install.sh.bak"
 install_script="scripts/juicefs-csi-cv-webhook-install.sh"
 
-cat deploy-dev/k8s.yaml >> $tmp_file
+cat deploy/k8s.yaml >> $tmp_file
 
 let start_num=$(cat -n $install_script | grep "# webhook.yaml start" | awk '{print $1}')+1
 let end_num=$(cat -n $install_script | grep "# webhook.yaml end" | awk '{print $1}')-1

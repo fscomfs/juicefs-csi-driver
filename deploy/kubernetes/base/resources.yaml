@@ -221,6 +221,15 @@ spec:
       labels:
         app: juicefs-csi-controller
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: controller
+                    operator: In
+                    values:
+                      - "1"
       serviceAccount: juicefs-csi-controller-sa
       priorityClassName: system-cluster-critical
       tolerations:

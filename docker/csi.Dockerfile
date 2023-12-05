@@ -35,14 +35,14 @@ COPY --from=builder /workspace/bin/juicefs-csi-driver /usr/local/bin/juicefs-csi
 COPY --from=builder /workspace/other_tool/ /other_tool/
 COPY --from=juicebinary /usr/local/bin/juicefs /usr/local/bin/juicefs
 RUN ln -s /usr/local/bin/juicefs /bin/mount.juicefs
-ENV https_proxy=${HPROXY}
-ENV http_proxy=${HPROXY}
+ENV HTTPS_PROXY=${HPROXY}
 RUN apk add --no-cache tini
 RUN /bin/sh -c 'if [ "$TARGETARCH" = "amd64" ]; then \
         cp /other_tool/fuse-overlayfs-x86_64 /usr/bin/fuse-overlayfs  && chmod +x /usr/bin/fuse-overlayfs; \
     else \
         cp /other_tool/fuse-overlayfs-aarch64 /usr/bin/fuse-overlayfs  && chmod +x /usr/bin/fuse-overlayfs; \
-       fi' \
-ENV https_proxy=
-ENV http_proxy=
+       fi'
+ENV HTTP_PROXY=''
+ENV HTTPS_PROXY=''
+RUN echo $HTTPS_PROXY
 ENTRYPOINT ["/sbin/tini", "--", "juicefs-csi-driver"]

@@ -117,7 +117,8 @@ func (p *PodMount) UmountTarget(ctx context.Context, target, podName string) err
 		klog.V(6).Infoln(string(out))
 		if !strings.Contains(string(out), "not mounted") &&
 			!strings.Contains(string(out), "mountpoint not found") &&
-			!strings.Contains(string(out), "no mount point specified") {
+			!strings.Contains(string(out), "no mount point specified") &&
+			!strings.Contains(string(out), "Invalid argument") {
 			klog.V(5).Infof("Unmount %s failed: %q, try to lazy unmount", target, err)
 			output, err := exec.Command("umount", "-l", target).CombinedOutput()
 			if err != nil {

@@ -13,7 +13,6 @@ require (
 	github.com/smartystreets/goconvey v1.6.4
 	github.com/spf13/cobra v1.1.3
 	github.com/vbauerster/mpb/v7 v7.5.3
-	github.com/vbauerster/mpb/v8 v8.6.2
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
 	golang.org/x/sys v0.13.0
 	google.golang.org/grpc v1.53.0

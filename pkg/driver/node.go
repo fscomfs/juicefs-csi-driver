@@ -227,16 +227,16 @@ func (d *nodeService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	volumeId := req.GetVolumeId()
 	klog.V(5).Infof("NodeUnpublishVolume: volume_id is %s", volumeId)
 
-	err := d.juicefs.JfsUnmount(ctx, volumeId, target)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not unmount %q: %v", target, err)
-	}
 	podId, err := util.TargetPathPodId(target)
 	if err != nil {
 		klog.V(5).Infof("NodeUnpublishVolume volumeId%s err:%v", volumeId, err)
 	} else {
 		unionFs := unionFs.CreateUnionFs(nil, podId, volumeId)
 		unionFs.UnionUnmount(ctx, target)
+	}
+	err = d.juicefs.JfsUnmount(ctx, volumeId, target)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not unmount %q: %v", target, err)
 	}
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }

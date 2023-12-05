@@ -211,6 +211,26 @@ func (u *unionFs) UnionMount(ctx context.Context, target string) error {
 }
 
 func (u *unionFs) UnionUnmount(ctx context.Context, mountPath string) error {
+	for {
+		command := exec.Command("umount", mountPath)
+		out, err := command.CombinedOutput()
+		if err == nil {
+			continue
+		}
+		klog.V(6).Infoln(string(out))
+		if !strings.Contains(string(out), "not mounted") &&
+			!strings.Contains(string(out), "mountpoint not found") &&
+			!strings.Contains(string(out), "no mount point specified") &&
+			!strings.Contains(string(out), "Invalid argument") {
+			klog.V(5).Infof("Unmount %s failed: %q, try to lazy unmount", mountPath, err)
+			output, err := exec.Command("umount", "-l", mountPath).CombinedOutput()
+			if err != nil {
+				klog.V(5).Infof("Could not lazy unmount %q: %v, output: %s", mountPath, err, string(output))
+				return err
+			}
+		}
+		break
+	}
 	base := path.Join(unionBashPath, u.podId, u.uniqueId)
 	if err := os.RemoveAll(base); err != nil {
 		klog.Errorf("[UnionUnmount] remove rw path:%s ,err:%v", base, err)
