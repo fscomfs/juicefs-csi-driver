@@ -258,12 +258,16 @@ func UseUnionFileSystem(pvcName, volumeID string, pod *corev1.Pod) bool {
 	return false
 }
 
-func UnionFileSystemSubPaths(bindSource string, pvcName string, pod *corev1.Pod) []string {
+func UnionFileSystemSubPaths(volumeID, bindSource string, pvcName string, pod *corev1.Pod, createVol func(path string) error) ([]string, error) {
 	subpath := []string{}
 	for k, val := range pod.Annotations {
 		if k == fmt.Sprintf("subpath-%s", pvcName) {
 			if val != "" {
 				for _, v := range strings.Split(val, ";") {
+					err := createVol(v)
+					if err != nil {
+						return subpath, err
+					}
 					if !strings.HasSuffix(v, "/") {
 						subpath = append(subpath, path.Join(bindSource, path.Dir(v)))
 					} else {
@@ -278,7 +282,7 @@ func UnionFileSystemSubPaths(bindSource string, pvcName string, pod *corev1.Pod)
 		subpath = append(subpath, path.Join(bindSource, "/"))
 	}
 	klog.V(6).Infof("UnionFileSystemSubPaths pvcName:%s,subpath:%v", pvcName, subpath)
-	return subpath
+	return subpath, nil
 }
 
 func TargetPathPodId(targetPath string) (string, error) {

@@ -4,9 +4,9 @@ metadata:
   name: test-pod
   namespace: default
   annotations:
-    subpath-test-pvc: "data-set-1/v1/000/1;data-set-1/v3/train/3"
-    union-test-pvc: "true"
-    sync-test-pvc: "true"
+    subpath-cvmart-data-set-pvc: "data-set-1/v1/000/1;data-set-1/v3/train/3"
+    union-cvmart-data-set-pvc: "true"
+    sync-cvmart-data-set-pvc: "false"
 spec:
   containers:
     - args:
@@ -26,4 +26,4 @@ spec:
   volumes:
     - name: data
       persistentVolumeClaim:
-        claimName: test-pvc
+        claimName: cvmart-data-set-pvc

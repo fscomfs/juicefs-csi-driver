@@ -146,12 +146,15 @@ func (d *nodeService) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	klog.V(6).Infof("NodePublishVolume: pvc name %+v", pvcName)
 
 	if util.UseUnionFileSystem(pvcName, volumeID, targetPod) {
-		lowerPath := util.UnionFileSystemSubPaths(bindSource, pvcName, targetPod)
-		for i := range lowerPath {
-			_, err := jfs.CreateVol(ctx, volumeID, strings.TrimLeft(lowerPath[i], jfs.GetBasePath()))
+		lowerPath, err := util.UnionFileSystemSubPaths(volumeID, bindSource, pvcName, targetPod, func(path string) error {
+			_, err := jfs.CreateVol(context.Background(), volumeID, path)
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, "Could not create volume: %s, %v", volumeID, err)
+				return err
 			}
+			return nil
+		})
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "unionfs mount  volumeID %s target %v create subpath fail %v", volumeID, target, err)
 		}
 		podId, err := util.TargetPathPodId(target)
 		if err != nil {
