@@ -34,12 +34,14 @@ spec:
     - subdir=/data-set
     - attr-cache=7200
     - entry-cache=7200
-    - open-cache=320
+    - open-cache=300
+    - read-only
     - dir-entry-cache=320
     - cache-dir=/data/jfs/cache
     - free-space-ratio=0.25
     - cache-size=10240000 #10Ti
     - cache-scan-interval=36000
+    - backup-meta=0
   # 目前 JuiceFS CSI 驱动不支持给静态 PV 设置存储容量，填写任意有效值即可
   capacity:
     storage: 10Pi

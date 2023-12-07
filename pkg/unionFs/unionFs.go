@@ -17,7 +17,6 @@ limitations under the License.
 package unionFs
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -145,22 +144,7 @@ func (u *unionFs) overlayMount(target string) (err error) {
 }
 
 func supportsFuseOverlay() error {
-	// We can try to modprobe aufs first before looking at
-	// proc/filesystems for when aufs is supported
-	exec.Command("modprobe", "aufs").Run()
-	f, err := os.Open("/proc/filesystems")
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	s := bufio.NewScanner(f)
-	for s.Scan() {
-		if strings.Contains(s.Text(), "aufs") {
-			return nil
-		}
-	}
-	return ErrAufsNotSupported
+	return nil
 }
 
 func supportsOverlay(d string) error {
@@ -205,7 +189,7 @@ func (u *unionFs) UnionMount(ctx context.Context, target string) error {
 		u.supportsFuseOverlay = true
 		return u.fuseOverlayMount(target)
 	} else {
-		klog.V(5).Infof("target not supper aufs %v", err)
+		klog.V(5).Infof("target not supper fuse overlay %v", err)
 	}
 	return fmt.Errorf("Union mount fail")
 }
