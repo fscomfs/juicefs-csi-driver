@@ -34,7 +34,8 @@ spec:
     - subdir=/data-set
     - attr-cache=7200
     - entry-cache=7200
-    - open-cache=300
+    - open-cache=7200
+    - open-cache-limit=10000000
     - read-only
     - dir-entry-cache=320
     - cache-dir=/data/jfs/cache

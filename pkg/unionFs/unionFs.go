@@ -25,6 +25,7 @@ import (
 	"golang.org/x/sys/unix"
 	"io/ioutil"
 	"k8s.io/klog"
+	k8sexec "k8s.io/utils/exec"
 	"os"
 	"os/exec"
 	"path"
@@ -68,10 +69,15 @@ var (
 )
 
 func CreateUnionFs(lowerPath []string, podId, uniqueId string) *unionFs {
+	mounter := mount.SafeFormatAndMount{
+		Interface: mount.New(""),
+		Exec:      k8sexec.New(),
+	}
 	return &unionFs{
-		lowerPath: lowerPath,
-		podId:     podId,
-		uniqueId:  uniqueId,
+		SafeFormatAndMount: mounter,
+		lowerPath:          lowerPath,
+		podId:              podId,
+		uniqueId:           uniqueId,
 	}
 }
 

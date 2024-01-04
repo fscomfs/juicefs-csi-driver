@@ -86,6 +86,8 @@ data:
         target_label: kubernetes_name
 
     - job_name: 'kubernetes-juicefs'
+      scrape_interval: 5s
+      scrape_timeout: 5s
       kubernetes_sd_configs:
       - role: pod
       relabel_configs:
@@ -96,3 +98,20 @@ data:
         regex: '(.*)'
         replacement: '$1'
         target_label: 'node_name'
+    - job_name: 'redis'
+      scrape_interval: 5s
+      scrape_timeout: 5s
+      static_configs:
+      - targets:
+        - redis://first-redis-host:6379
+        - redis://second-redis-host:6379
+        - redis://second-redis-host:6380
+        - redis://second-redis-host:6381
+      metrics_path: /scrape
+      relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: {redis_exporter}:9121

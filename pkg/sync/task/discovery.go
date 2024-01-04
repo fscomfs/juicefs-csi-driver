@@ -445,6 +445,7 @@ func (d *Discovery) UpdateSourceSyncProcess(sourcePath string, stat ProcessStat)
 	return err
 }
 func (d *Discovery) GetSourceSyncProcess(sourcePaths ...string) (process map[string]ProcessStat, err error) {
+	process = make(map[string]ProcessStat)
 	if res, err2 := d.MetaClient.HMGet(context.Background(), d.metaKeyProcess(), sourcePaths...).Result(); err2 == nil {
 		for i := range res {
 			var state ProcessStat
