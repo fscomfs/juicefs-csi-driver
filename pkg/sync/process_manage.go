@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-func startProcessManage() {
+func startProcessCollector() {
 	http.NewServeMux()
 	http.HandleFunc(config.CheckSyncStatusApi, checkStatus)
 	http.HandleFunc(config.SyncProcessStateApi, processState)

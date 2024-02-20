@@ -50,6 +50,7 @@ var (
 	sourcePath     []string
 	mixture        string
 	syncServerPort int
+	metricsPort    int
 )
 
 func main() {
@@ -76,8 +77,9 @@ func main() {
 	cmd.Flags().BoolVar(&cv_webhook, "cv-webhook", false, "Enable webhook in controller. default false.")
 	cmd.Flags().StringVar(&certDir, "webhook-cert-dir", "/etc/webhook/certs", "Admission webhook cert/key dir.")
 	cmd.Flags().IntVar(&webhookPort, "webhook-port", 9444, "Admission webhook cert/key dir.")
-	cmd.Flags().StringVar(&mixture, "mixture", "cloud", "Enable webhook in controller. default false.")
+	cmd.Flags().StringVar(&mixture, "mixture", "cloud", "Hybrid Cloud Identity")
 	cmd.Flags().IntVar(&syncServerPort, "sync-server-port", 9446, "sync controller server port")
+	cmd.Flags().IntVar(&metricsPort, "metrics-port", 9447, "")
 
 	// node flags
 	cmd.Flags().BoolVar(&podManager, "enable-manager", false, "Enable pod manager in csi node. default false.")

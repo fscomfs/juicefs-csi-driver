@@ -84,7 +84,6 @@ data:
       - source_labels: [__meta_kubernetes_service_name]
         action: replace
         target_label: kubernetes_name
-
     - job_name: 'kubernetes-juicefs'
       scrape_interval: 5s
       scrape_timeout: 5s
@@ -114,4 +113,4 @@ data:
       - source_labels: [__param_target]
         target_label: instance
       - target_label: __address__
-        replacement: {redis_exporter}:9121
+        replacement: 192.168.1.1:9121

@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/juicedata/juicefs-csi-driver/pkg/config"
 	"github.com/juicedata/juicefs-csi-driver/pkg/k8sclient"
@@ -9,7 +10,6 @@ import (
 	"github.com/juicedata/juicefs-csi-driver/pkg/sync/task"
 	"github.com/juicedata/juicefs-csi-driver/pkg/util"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -53,11 +53,26 @@ type SyncPodManage struct {
 var (
 	scheme         = runtime.NewScheme()
 	syncController *DataSyncController
+	syncFailure    *prometheus.GaugeVec
+	syncSuccess    *prometheus.GaugeVec
+	syncDoing      *prometheus.GaugeVec
 )
 
 func init() {
 	utilruntime.Must(corev1.AddToScheme(scheme))
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	syncFailure = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "fail",
+		Help: "sync fail",
+	}, []string{"pv_name"})
+	syncSuccess = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "success",
+		Help: "sync success",
+	}, []string{"pv_name"})
+	syncDoing = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "doing",
+		Help: "sync doing",
+	}, []string{"pv_name"})
 }
 func NewDataSyncController(ctx context.Context,
 	leaderElection bool,
@@ -101,14 +116,16 @@ func NewDataSyncController(ctx context.Context,
 		mgr:       mgr,
 		k8sClient: k8sClient,
 		ctx:       ctx,
-		mixture:   config.SyncController,
+		mixture:   config.Mixture,
 	}
 	return syncController, err
 }
 func (c *DataSyncController) Run(ctx context.Context) {
-	wrapRegister(c.mixture)
+	registerer, registry := wrapRegister(c.mixture)
+	c.exposeMetrics(config.MetricsPort, registerer, registry)
 	go func() {
-		startProcessManage()
+		//Progress Collector
+		startProcessCollector()
 	}()
 	c.timerInitConfig()
 	if err := c.SetupWithManager(c.mgr); err != nil {
@@ -279,20 +296,6 @@ func (c *DataSyncController) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
-	//controller2, err := controller.New("pv_update", mgr, controller.Options{Reconciler: &PVManage{
-	//	SyncController: c,
-	//}})
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//controller3, err := controller.New("pv_secret", mgr, controller.Options{Reconciler: &SecretManage{
-	//	SyncController: c,
-	//}})
-	//if err != nil {
-	//	return err
-	//}
-
 	err = controller1.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForObject{}, predicate.Funcs{
 		CreateFunc: func(event event.CreateEvent) bool {
 			pod := event.Object.(*corev1.Pod)
@@ -323,65 +326,66 @@ func (c *DataSyncController) SetupWithManager(mgr ctrl.Manager) error {
 			return false
 		},
 	})
-	//err = controller2.Watch(&source.Kind{Type: &corev1.PersistentVolume{}}, &handler.EnqueueRequestForObject{}, predicate.Funcs{
-	//	CreateFunc: func(event event.CreateEvent) bool {
-	//		pv, ok := event.Object.(*corev1.PersistentVolume)
-	//		if !ok {
-	//			klog.V(6).Infof("pv.onUpdateFunc Skip object: %v", pv.Name)
-	//			return false
-	//		}
-	//		klog.V(6).Infof("watch pv %s created", pv.GetName())
-	//		// check pv deleted
-	//		if _, ok := pv.Labels[config.SyncPVLabelKey]; ok {
-	//			klog.V(6).Infof("pv %s is sync pv", pv.Name)
-	//			return true
-	//		}
-	//		return false
-	//	},
-	//	UpdateFunc: func(updateEvent event.UpdateEvent) bool {
-	//		pvNew, ok := updateEvent.ObjectNew.(*corev1.PersistentVolume)
-	//		klog.V(6).Infof("watch pv %s updated", pvNew.GetName())
-	//		if !ok {
-	//			klog.V(6).Infof("pod.onUpdateFunc Skip object: %v", updateEvent.ObjectNew)
-	//			return false
-	//		}
-	//		return true
-	//	},
-	//	DeleteFunc: func(deleteEvent event.DeleteEvent) bool {
-	//		pv := deleteEvent.Object.(*corev1.PersistentVolume)
-	//		klog.V(6).Infof("watch pv %s deleted", pv.GetName())
-	//		if _, ok := pv.Labels[config.SyncPVLabelKey]; ok {
-	//			klog.V(6).Infof("pv %s is sync pv", pv.Name)
-	//			return true
-	//		}
-	//		return false
-	//	},
-	//})
-	//
-	//err = controller3.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestForObject{})
 	return err
 }
 
 func wrapRegister(mixture string) (prometheus.Registerer, *prometheus.Registry) {
-	registry := prometheus.NewRegistry() // replace default so only JuiceFS metrics are exposed
-	registerer := prometheus.WrapRegistererWithPrefix("dataset_",
+	registry := prometheus.NewRegistry()
+	registerer := prometheus.WrapRegistererWithPrefix("sync_",
 		prometheus.WrapRegistererWith(prometheus.Labels{"mixture": mixture}, registry))
-	registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-	registerer.MustRegister(collectors.NewGoCollector())
+	//registerer.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	//registerer.MustRegister(collectors.NewGoCollector())
 	return registerer, registry
 }
 
-func exposeMetrics(port int, registerer prometheus.Registerer, registry *prometheus.Registry) {
-	http.Handle("/metrics", promhttp.HandlerFor(
-		registry,
-		promhttp.HandlerOpts{
-			// Opt into OpenMetrics to support exemplars.
-			EnableOpenMetrics: true,
-		},
-	))
+func (c *DataSyncController) exposeMetrics(port int, registerer prometheus.Registerer, registry *prometheus.Registry) {
+	registerer.MustRegister(syncFailure)
+	registerer.MustRegister(syncSuccess)
+	registerer.MustRegister(syncDoing)
+	klog.V(6).Infof("register syncFailure syncSuccess  syncDoing metrics")
 	go func() {
+		http.Handle("/metrics", promhttp.HandlerFor(
+			registry,
+			promhttp.HandlerOpts{
+				// Opt into OpenMetrics to support exemplars.
+				EnableOpenMetrics: true,
+			},
+		))
 		if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
-			klog.V(5).Infof("start promthues fail")
+			klog.V(5).Infof("start promthues exporter fail")
 		}
+	}()
+	go func() {
+		for {
+			for s := range c.discoverys {
+				res := c.discoverys[s].MetaClient.HGetAll(context.Background(), c.discoverys[s].MetaKeyAll())
+				mapres, err := res.Result()
+				success := 0
+				failure := 0
+				doing := 0
+				if err == nil {
+					for _, v := range mapres {
+						var res task.SyncProcessStatus
+						err = json.Unmarshal([]byte(v), &res)
+						if err == nil {
+							if res.SyncStatus == task.SYNC_FAIL {
+								failure += 1
+							}
+							if res.SyncStatus == task.SYNC_COMPLETED {
+								success += 1
+							}
+							if res.SyncStatus == task.SYNC_DOING {
+								doing += 1
+							}
+						}
+					}
+				}
+				syncSuccess.WithLabelValues(s).Set(float64(success))
+				syncFailure.WithLabelValues(s).Set(float64(failure))
+				syncDoing.WithLabelValues(s).Set(float64(doing))
+			}
+			time.Sleep(5 * time.Second)
+		}
+
 	}()
 }

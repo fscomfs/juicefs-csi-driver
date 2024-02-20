@@ -70,6 +70,7 @@ var (
 	SyncConcurrentNumber = 3 //do sync concurrent number
 	ControllerURL        = ""
 	SyncServerPort       = 9446
+	MetricsPort          = 0
 )
 
 const (

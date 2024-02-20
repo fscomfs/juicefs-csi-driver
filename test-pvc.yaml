@@ -34,10 +34,10 @@ spec:
     - subdir=/data-set
     - attr-cache=7200
     - entry-cache=7200
-    - open-cache=7200
-    - open-cache-limit=10000000
+    - open-cache=360000
+    - open-cache-limit=2000000
     - read-only
-    - dir-entry-cache=320
+    - dir-entry-cache=7200
     - cache-dir=/data/jfs/cache
     - free-space-ratio=0.25
     - cache-size=10240000 #10Ti
@@ -62,12 +62,12 @@ spec:
       name: cvmart-data-set-pv-secret
       namespace: kube-system
     volumeAttributes:
-      juicefs/mount-delete-delay: 8h
       juicefs/mount-cpu-request: 100m
       juicefs/mount-memory-request: 500Mi
       juicefs/mount-cpu-limit: 5000m
       juicefs/mount-memory-limit: 8Gi
       juicefs/mount-annotations: "prometheus.io.scrape: juicefs"
+      juicefs/mount-delete-delay: 8h
 
 ---
 apiVersion: v1

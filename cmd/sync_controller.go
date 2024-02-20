@@ -1,5 +1,5 @@
 /*
- Copyright 2022 Juicedata Inc
+ Copyright 2022 cvmart Inc
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ func init() {
 }
 func syncControllerRun(ctx context.Context) *sync.DataSyncController {
 	config.SyncServerPort = syncServerPort
+	config.MetricsPort = metricsPort
 	//start process service
 	controller, err := sync.NewDataSyncController(ctx, leaderElection, leaderElectionNamespace, leaderElectionLeaseDuration)
 	if err != nil {

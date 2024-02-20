@@ -429,6 +429,7 @@ spec:
         - --v=6
         - --cv-webhook=true
         - --mixture=cloud
+        - --metrics-port=9447
         env:
         - name: JUICEFS_CE_MOUNT_IMAGE
           value: S_MOUNT_IMAGE
@@ -859,8 +860,10 @@ rules:
   - get
   - create
   - update
+  - watch
   - patch
   - delete
+  - list
 - apiGroups:
   - ""
   resources:
@@ -983,13 +986,16 @@ spec:
   ports:
   - name: https-rest
     port: 443
-    targetPort: 9447
+    targetPort: 9444
   selector:
     app: juicefs-csi-controller
     app.kubernetes.io/instance: juicefs-csi-driver
     app.kubernetes.io/name: juicefs-csi-driver
     app.kubernetes.io/version: master
 ---
+annotations:
+  prometheus.io/port: "9447"
+  prometheus.io/scrape: "true"
 apiVersion: v1
 kind: Service
 metadata:
@@ -1021,7 +1027,7 @@ metadata:
   name: juicefs-csi-controller
   namespace: kube-system
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: juicefs-csi-controller
@@ -1037,6 +1043,15 @@ spec:
         app.kubernetes.io/name: juicefs-csi-driver
         app.kubernetes.io/version: master
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: controller
+                operator: In
+                values:
+                - "1"
       containers:
       - args:
         - --endpoint=$(CSI_ENDPOINT)
@@ -1064,6 +1079,8 @@ spec:
           value: /var/lib/juicefs/volume
         - name: JUICEFS_CONFIG_PATH
           value: /var/lib/juicefs/config
+        - name: ENABLE_APISERVER_LIST_CACHE
+          value: "true"
         image: juicedata/juicefs-csi-driver:v0.22.1
         livenessProbe:
           failureThreshold: 5
@@ -1105,12 +1122,12 @@ spec:
       - args:
         - --csi-address=$(ADDRESS)
         - --timeout=60s
-        - --enable-leader-election
+        - --leader-election
         - --v=5
         env:
         - name: ADDRESS
           value: /var/lib/csi/sockets/pluginproxy/csi.sock
-        image: quay.io/k8scsi/csi-provisioner:v1.6.0
+        image: k8s.dockerproxy.com/sig-storage/csi-provisioner:v2.2.2
         name: csi-provisioner
         volumeMounts:
         - mountPath: /var/lib/csi/sockets/pluginproxy/
@@ -1122,7 +1139,7 @@ spec:
         env:
         - name: ADDRESS
           value: /var/lib/csi/sockets/pluginproxy/csi.sock
-        image: quay.io/k8scsi/csi-resizer:v1.0.1
+        image: k8s.dockerproxy.com/sig-storage/csi-resizer:v1.8.0
         name: csi-resizer
         volumeMounts:
         - mountPath: /var/lib/csi/sockets/pluginproxy/
@@ -1135,7 +1152,7 @@ spec:
           value: /csi/csi.sock
         - name: HEALTH_PORT
           value: "9909"
-        image: quay.io/k8scsi/livenessprobe:v1.1.0
+        image: k8s.dockerproxy.com/sig-storage/livenessprobe:v2.6.0
         name: liveness-probe
         volumeMounts:
         - mountPath: /csi
@@ -1255,7 +1272,7 @@ webhooks:
   name: sync.inject.juicefs.com
   namespaceSelector:
     matchLabels:
-      juicefs.com/enable-injection: "true"
+      data-set-sync/enable-injection: "true"
   rules:
   - apiGroups:
     - ""

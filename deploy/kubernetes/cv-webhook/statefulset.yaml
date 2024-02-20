@@ -16,3 +16,4 @@ spec:
             - --v=6
             - --cv-webhook=true
             - --mixture=cloud
+            - --metrics-port=9447

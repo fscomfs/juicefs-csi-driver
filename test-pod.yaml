@@ -4,16 +4,16 @@ metadata:
   name: test-pod
   namespace: default
   annotations:
-    subpath-cvmart-data-set-pvc: "data-set-1/v1/000/1;data-set-1/v3/train/3"
+    subpath-cvmart-data-set-pvc: "data-set-1/v1/000/1;data-set-1/v3/train/3;data-set-1/v4/testa;data-set-1/v5/testa;data-set-1/v5/testb;data-set-1/v5/testc;data-set-1/v6/a"
     union-cvmart-data-set-pvc: "true"
     sync-cvmart-data-set-pvc: "false"
 spec:
   containers:
     - args:
         - -c
-        - sleep 36000
+        - "chmod +x /home/data/1/run.sh && bash /home/data/1/run.sh /home/data/1 read --path=/home/data/a --p=1"
       command:
-        - /bin/sh
+        - bash
       image: 192.168.1.76:8099/evtrain/cvmart-daemon:v1.0
       name: app
       volumeMounts:

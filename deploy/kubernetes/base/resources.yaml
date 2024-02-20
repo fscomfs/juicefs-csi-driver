@@ -554,6 +554,9 @@ kind: Service
 metadata:
   name: sync-controller
   namespace: kube-system
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9447"
 spec:
   ports:
     - name: sync

@@ -18,7 +18,7 @@
 tmp_file="k8s.yaml"
 tmp_file_with_certmanager="webhook-with-certmanager.yaml"
 tmp_install_script="juicefs-csi-cv-webhook-install.sh.bak"
-install_script="scripts/juicefs-csi-cv-webhook-install.sh"
+install_script="scripts/dev-juicefs-csi-cv-webhook-install.sh"
 
 cat deploy-dev/k8s.yaml >> $tmp_file
 

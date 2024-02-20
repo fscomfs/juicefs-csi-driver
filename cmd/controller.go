@@ -49,6 +49,7 @@ func parseControllerConfig() {
 	config.CvWebhook = cv_webhook
 	config.Provisioner = provisioner
 	config.FormatInPod = formatInPod
+	config.Mixture = mixture
 	// enable mount manager by default in csi controller
 	config.MountManager = true
 	if process {

@@ -328,7 +328,7 @@ func (d *Discovery) timerCheck(ctx context.Context) error {
 }
 
 func (d *Discovery) GetSourcePathStatus(sourcePath string) (status SyncProcessStatus, err error) {
-	s, err := d.MetaClient.HGet(context.Background(), d.metaKeyAll(), sourcePath).Bytes()
+	s, err := d.MetaClient.HGet(context.Background(), d.MetaKeyAll(), sourcePath).Bytes()
 	if err != nil {
 		return SyncProcessStatus{}, err
 	}
@@ -338,7 +338,7 @@ func (d *Discovery) GetSourcePathStatus(sourcePath string) (status SyncProcessSt
 }
 
 func (d *Discovery) GetSourcePathsStatus(sourcePaths []string) (status map[string]SyncProcessStatus, err error) {
-	s, err := d.MetaClient.HMGet(context.Background(), d.metaKeyAll(), sourcePaths...).Result()
+	s, err := d.MetaClient.HMGet(context.Background(), d.MetaKeyAll(), sourcePaths...).Result()
 	if err != nil && err != redis.Nil {
 		return status, err
 	}
@@ -382,7 +382,7 @@ func (d *Discovery) UpdateSourceSyncModifyTime(sourcePath string, modifyTime tim
 	} else {
 		d.MetaClient.HDel(context.Background(), d.metaKeySync(), syncProcess.SourcePath)
 	}
-	d.MetaClient.HSet(context.Background(), d.metaKeyAll(), syncProcess.SourcePath, statusStr)
+	d.MetaClient.HSet(context.Background(), d.MetaKeyAll(), syncProcess.SourcePath, statusStr)
 	return nil
 }
 func (d *Discovery) UpdateSourceSyncStatus(sourcePath string, status int) error {
@@ -432,11 +432,10 @@ func (d *Discovery) UpdateSourceSyncStatus(sourcePath string, status int) error 
 	statusStr, _ := json.Marshal(syncProcess)
 	if syncProcess.needSyncQueue() {
 		d.MetaClient.HSet(context.Background(), d.metaKeySync(), syncProcess.SourcePath, statusStr)
-
 	} else {
 		d.MetaClient.HDel(context.Background(), d.metaKeySync(), syncProcess.SourcePath)
 	}
-	d.MetaClient.HSet(context.Background(), d.metaKeyAll(), syncProcess.SourcePath, statusStr)
+	d.MetaClient.HSet(context.Background(), d.MetaKeyAll(), syncProcess.SourcePath, statusStr)
 	return nil
 }
 func (d *Discovery) UpdateSourceSyncProcess(sourcePath string, stat ProcessStat) error {
@@ -468,7 +467,7 @@ func (d *Discovery) AddOrUpdate(status SyncProcessStatus, isAdd bool) error {
 		if err != nil {
 			klog.Errorf("set sync status error:%v", err)
 		}
-		err = d.MetaClient.HSet(context.Background(), d.metaKeyAll(), status.SourcePath, string(statusStr)).Err()
+		err = d.MetaClient.HSet(context.Background(), d.MetaKeyAll(), status.SourcePath, string(statusStr)).Err()
 		return err
 	}
 }
@@ -526,7 +525,7 @@ func (d *Discovery) doSync(sync SyncProcessStatus) error {
 	return nil
 }
 
-func (d *Discovery) metaKeyAll() string {
+func (d *Discovery) MetaKeyAll() string {
 	return fmt.Sprintf("SYNC_TASK_%s_ALL", d.PV.Name)
 }
 
