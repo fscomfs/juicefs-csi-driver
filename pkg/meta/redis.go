@@ -106,6 +106,9 @@ func newRedisMeta(driver, addr string) (redis.UniversalClient, error) {
 			}
 		}
 		fopt.SentinelPassword = os.Getenv("SENTINEL_PASSWORD")
+		if fopt.SentinelPassword == "" {
+			fopt.SentinelPassword = opt.Password
+		}
 		fopt.DB = opt.DB
 		fopt.Username = opt.Username
 		fopt.Password = opt.Password

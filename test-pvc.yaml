@@ -6,12 +6,15 @@ metadata:
 type: Opaque
 stringData:
   name: cvmart-data-set-vol
-  metaurl: redis://:admindev@192.168.1.74:6379/5
+#  metaurl: redis://:admindev@192.168.1.74:6379/5
+#  metaurl: redis://:test123456@mymaster,192.168.67.71,192.168.1.175:26379/2?route-read=replica
+  metaurl: redis://:test123456@mymaster,192.168.67.71,192.168.1.175:26379/2
   storage: minio
-  bucket:  http://192.168.1.76:9000/cvmart-data-set-vol
+#  bucket:  http://192.168.1.76:9000/cvmart-data-set-vol-dev
+  bucket:  http://192.168.1.76:9000/dev-cvmart-data-vol-dev
   access-key: Adminminio
   secret-key: Adminminio
-  envs: "{TZ: Asia/Shanghai}"
+  envs: "{\"TZ\": \"Asia/Shanghai\",\"SENTINEL_PASSWORD\": \"test123456\"}"
   central_storage: "oss"
   central_bucket: "fscomfs.oss-cn-shenzhen.aliyuncs.com/dev"
   central_access_key: "LTAI5tBCscCbdfHRWhFD5HEQ"
@@ -26,9 +29,9 @@ metadata:
   name: cvmart-data-set-pv
   labels:
     juicefs-name: cvmart-data-set-pv
-    discovery-sync: "true"
+    discovery-sync: "true" #
   annotations:
-    data-set-sync: "true"
+    data-set-sync: "true" #
 spec:
   mountOptions:
     - subdir=/data-set
@@ -36,7 +39,7 @@ spec:
     - entry-cache=7200
     - open-cache=360000
     - open-cache-limit=2000000
-    - read-only
+#    - read-only
     - dir-entry-cache=7200
     - cache-dir=/data/jfs/cache
     - free-space-ratio=0.25
@@ -67,7 +70,7 @@ spec:
       juicefs/mount-cpu-limit: 5000m
       juicefs/mount-memory-limit: 8Gi
       juicefs/mount-annotations: "prometheus.io.scrape: juicefs"
-      juicefs/mount-delete-delay: 8h
+      juicefs/mount-delete-delay: 1h
 
 ---
 apiVersion: v1

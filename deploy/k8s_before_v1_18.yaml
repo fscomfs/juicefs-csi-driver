@@ -277,12 +277,12 @@ spec:
     app.kubernetes.io/name: juicefs-csi-driver
     app.kubernetes.io/version: master
 ---
-annotations:
-  prometheus.io/port: "9447"
-  prometheus.io/scrape: "true"
 apiVersion: v1
 kind: Service
 metadata:
+  annotations:
+    prometheus.io/port: "9447"
+    prometheus.io/scrape: "true"
   labels:
     app.kubernetes.io/instance: juicefs-csi-driver
     app.kubernetes.io/name: juicefs-csi-driver

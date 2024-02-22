@@ -24,11 +24,21 @@ type PlatformDataSync struct {
 	MetaUrl           string
 	DstFileSystemName string
 	SubDir            string
+	Envs              map[string]string
 }
 
 func (p *PlatformDataSync) NewSyncPod() *corev1.Pod {
 	Image := config.CEMountImage
 	cmd := p.buildCmd()
+	var envs []corev1.EnvVar
+	if p.Envs != nil {
+		for s := range p.Envs {
+			envs = append(envs, corev1.EnvVar{
+				Name:  s,
+				Value: p.Envs[s],
+			})
+		}
+	}
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        p.PodName,
@@ -44,6 +54,7 @@ func (p *PlatformDataSync) NewSyncPod() *corev1.Pod {
 					ImagePullPolicy: corev1.PullIfNotPresent,
 					Image:           Image,
 					Name:            config.SyncContainerName,
+					Env:             envs,
 					EnvFrom: []corev1.EnvFromSource{{
 						SecretRef: &corev1.SecretEnvSource{
 							LocalObjectReference: corev1.LocalObjectReference{

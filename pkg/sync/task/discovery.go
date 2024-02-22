@@ -14,6 +14,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog"
 	"net/http"
 	"path"
@@ -63,6 +65,7 @@ type Discovery struct {
 	BucketUrl          string
 	BucketAccessKey    string
 	BucketSecretKey    string
+	Envs               string
 	client             *http.Client
 	MetaClient         redis.UniversalClient
 	Mutex              *sync.Mutex
@@ -88,6 +91,7 @@ type SyncProcessStatus struct {
 	TaskName        string    `json:"task_name"`
 	LastModifyTime  time.Time `json:"last_modify_time,omitempty"`
 	TryTime         int       `json:"try_time"`
+	CallBack        string    `json:"call_back,omitempty"`
 }
 
 func init() {
@@ -110,6 +114,7 @@ type DataItem struct {
 	TargetPV       string    `json:"target_pv"`
 	LastModifyTime time.Time `json:"last_modify_time,omitempty"`
 	SystemTime     time.Time `json:"system_time,omitempty"`
+	CallBack       string    `json:"call_back,omitempty"`
 }
 type PlatformResponse struct {
 	Code    int        `json:"code"`
@@ -155,6 +160,7 @@ func NewDiscover(ctx context.Context, secret corev1.Secret, mixture string, pv c
 		BucketUrl:       string(secret.Data[config.CentralBucket]),
 		BucketAccessKey: string(secret.Data[config.CentralAccessKey]),
 		BucketSecretKey: string(secret.Data[config.CentralSecretKey]),
+		Envs:            string(secret.Data["envs"]),
 		PV:              pv,
 		Secret:          secret,
 		Mutex:           new(sync.Mutex),
@@ -436,11 +442,82 @@ func (d *Discovery) UpdateSourceSyncStatus(sourcePath string, status int) error 
 		d.MetaClient.HDel(context.Background(), d.metaKeySync(), syncProcess.SourcePath)
 	}
 	d.MetaClient.HSet(context.Background(), d.MetaKeyAll(), syncProcess.SourcePath, statusStr)
+	go func() {
+		callbackSyncStatus(syncProcess)
+	}()
 	return nil
 }
+
+func callbackSyncStatus(status SyncProcessStatus) error {
+	client := http.DefaultClient
+	p, _ := json.Marshal(status)
+	retry.OnError(wait.Backoff{
+		Duration: time.Second,
+		Factor:   1.2,
+		Steps:    3,
+		Jitter:   0,
+		Cap:      0,
+	}, func(err error) bool {
+		if err == nil {
+			return false
+		}
+		return true
+	}, func() error {
+		ctxTimeOut, _ := context.WithTimeout(context.Background(), 2*time.Second)
+		req, err := http.NewRequestWithContext(ctxTimeOut, http.MethodPost, status.CallBack, bytes.NewBuffer(p))
+		if err != nil {
+			klog.Errorf("callbackSyncStatus error:%v", err)
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if res, err := client.Do(req); err == nil {
+			if res.StatusCode == http.StatusOK {
+				return nil
+			} else {
+				return err
+			}
+		} else {
+			klog.Errorf("callbackSyncStatus error:%v", err)
+			return err
+		}
+	})
+	return nil
+}
+func callbackSyncTaskProcess(status SyncProcessStatus, stat ProcessStat) error {
+	client := http.DefaultClient
+	p, _ := json.Marshal(stat)
+	ctxTimeOut, _ := context.WithTimeout(context.Background(), 2*time.Second)
+	req, err := http.NewRequestWithContext(ctxTimeOut, http.MethodPut, status.CallBack, bytes.NewBuffer(p))
+	if err != nil {
+		klog.Errorf("callbackSyncStatus error:%v", err)
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if res, err := client.Do(req); err == nil {
+		if res.StatusCode == http.StatusOK {
+			return nil
+		} else {
+			return err
+		}
+		defer res.Body.Close()
+	} else {
+		klog.Errorf("callbackSyncStatus error:%v", err)
+		return err
+	}
+	return nil
+}
+
 func (d *Discovery) UpdateSourceSyncProcess(sourcePath string, stat ProcessStat) error {
 	statusStr, _ := json.Marshal(stat)
 	err := d.MetaClient.HSet(context.Background(), d.metaKeyProcess(), sourcePath, statusStr).Err()
+	if err == nil {
+		status, err := d.GetSourcePathStatus(sourcePath)
+		if err == nil && status.CallBack != "" {
+			go func() {
+				callbackSyncTaskProcess(status, stat)
+			}()
+		}
+	}
 	return err
 }
 func (d *Discovery) GetSourceSyncProcess(sourcePaths ...string) (process map[string]ProcessStat, err error) {
@@ -503,6 +580,14 @@ func (d *Discovery) doSyncCheck(ctx context.Context, syncStatus SyncProcessStatu
 }
 
 func (d *Discovery) doSync(sync SyncProcessStatus) error {
+	var envs map[string]string
+	if d.Envs != "" {
+		err := json.Unmarshal([]byte(d.Envs), &envs)
+		if err != nil {
+			klog.Errorf("envs parse error:%v", err)
+			return err
+		}
+	}
 	syncBuilder := PlatformDataSync{
 		PodName:         sync.TaskName,
 		PVName:          d.PV.Name,
@@ -516,6 +601,7 @@ func (d *Discovery) doSync(sync SyncProcessStatus) error {
 		SourceSecretKey: d.BucketSecretKey,
 		MetaUrl:         d.MetaUrl,
 		SourcePath:      sync.SourcePath,
+		Envs:            envs,
 	}
 	syncPod := syncBuilder.NewSyncPod()
 	_, err := d.K8sClient.CreatePod(context.Background(), syncPod)
@@ -585,6 +671,7 @@ func (d *Discovery) discoverFromPlatform(ctx context.Context) error {
 				LastSyncTimeTmp: platSourceData.LastModifyTime.Add(time.Minute),
 				LastModifyTime:  platSourceData.LastModifyTime,
 				UsageFrequency:  0,
+				CallBack:        platSourceData.CallBack,
 			}
 			isAdd = true
 		}
